@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -113,26 +112,16 @@ export default function NewInvoice() {
 
   const generatePDFFile = async (): Promise<File | null> => {
     try {
-      // Dynamic imports to prevent SSR errors
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).default;
       
       const docElement = document.getElementById('invoice-document');
-      if (!docElement) {
-        toast({ variant: "destructive", title: "Export Error", description: "Invoice template not found." });
-        return null;
-      }
+      if (!docElement) return null;
 
-      // Capture with higher scale for mobile quality
       const canvas = await html2canvas(docElement, { 
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        onclone: (clonedDoc) => {
-          const el = clonedDoc.getElementById('invoice-document');
-          if (el) el.style.display = 'block';
-        }
+        backgroundColor: '#ffffff'
       });
       
       const imgData = canvas.toDataURL('image/jpeg', 0.9);
@@ -145,7 +134,6 @@ export default function NewInvoice() {
       return new File([pdfBlob], `${successInvoice?.invoiceNumber || 'invoice'}.pdf`, { type: 'application/pdf' });
     } catch (err) {
       console.error("PDF generation error:", err);
-      toast({ variant: "destructive", title: "PDF Failed", description: "Could not generate file." });
       return null;
     }
   };
@@ -168,7 +156,6 @@ export default function NewInvoice() {
     const file = await generatePDFFile();
     const message = `Dear ${successInvoice.customerName},\n\nThank you for shopping with ISRA Ethnics.\n\nYour invoice ${successInvoice.invoiceNumber} is attached.\n\nHappy Shopping!`;
 
-    // Try Web Share API first (best for PWA on Android)
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({
@@ -184,7 +171,7 @@ export default function NewInvoice() {
       }
     }
     
-    // Fallback to WhatsApp link
+    // Fallback if sharing files is not supported
     window.open(`https://wa.me/91${successInvoice.customerMobile}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
@@ -200,20 +187,20 @@ export default function NewInvoice() {
             <p className="text-muted-foreground">Order Ref: <span className="font-bold text-primary">{successInvoice.invoiceNumber}</span></p>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-               <div className="p-4 bg-white rounded-lg shadow-sm">
-                  <p className="text-xs text-muted-foreground uppercase">Customer</p>
+               <div className="p-4 bg-white rounded-lg shadow-sm text-left">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Customer</p>
                   <p className="font-bold truncate">{successInvoice.customerName}</p>
                </div>
-               <div className="p-4 bg-white rounded-lg shadow-sm">
-                  <p className="text-xs text-muted-foreground uppercase">Amount</p>
+               <div className="p-4 bg-white rounded-lg shadow-sm text-left">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Amount</p>
                   <p className="font-bold text-secondary">{formatCurrency(successInvoice.grandTotal)}</p>
                </div>
-               <div className="p-4 bg-white rounded-lg shadow-sm">
-                  <p className="text-xs text-muted-foreground uppercase">Items</p>
+               <div className="p-4 bg-white rounded-lg shadow-sm text-left">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Items</p>
                   <p className="font-bold">{successInvoice.items.length}</p>
                </div>
-               <div className="p-4 bg-white rounded-lg shadow-sm">
-                  <p className="text-xs text-muted-foreground uppercase">Date</p>
+               <div className="p-4 bg-white rounded-lg shadow-sm text-left">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Date</p>
                   <p className="font-bold">{successInvoice.date}</p>
                </div>
             </div>
@@ -229,7 +216,6 @@ export default function NewInvoice() {
             </div>
           </div>
 
-          {/* This element is rendered off-screen but available for capture */}
           <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <InvoicePDF 
               invoice={successInvoice} 
@@ -437,14 +423,6 @@ export default function NewInvoice() {
                   disabled={isExistingCustomer}
                 />
               </div>
-              {isExistingCustomer && (
-                <Button variant="ghost" size="sm" className="text-xs text-secondary p-0" onClick={() => {
-                   setIsExistingCustomer(false);
-                   setCustomer({ ...customer, name: '', address: '', id: 'new' });
-                }}>
-                  Not {customer.name}? Add as new customer
-                </Button>
-              )}
             </CardContent>
           </Card>
 
