@@ -1,3 +1,4 @@
+
 export const formatCurrency = (amount: number) => {
   const formatted = new Intl.NumberFormat('en-IN', {
     maximumFractionDigits: 0,
