@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -6,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone, UserCheck, UserPlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { INITIAL_PRODUCTS, INITIAL_CUSTOMERS } from '@/lib/mock-data';
@@ -14,11 +15,11 @@ import { InvoiceItem, Customer, Product, Invoice } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { InvoicePDF } from '@/components/invoice/InvoicePDF';
-import { cn } from '@/lib/utils';
 
 export default function NewInvoice() {
   const { toast } = useToast();
   const [customer, setCustomer] = useState<Partial<Customer>>({ name: '', mobile: '', address: '' });
+  const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -30,9 +31,18 @@ export default function NewInvoice() {
       const existing = INITIAL_CUSTOMERS.find(c => c.mobile === customer.mobile);
       if (existing) {
         setCustomer(existing);
-        toast({ title: "Customer Recognized", description: `Welcome back, ${existing.name}!` });
+        setIsExistingCustomer(true);
+        toast({ title: "Customer Found", description: `Recognized: ${existing.name}` });
         loadSuggestions(existing);
+      } else {
+        setIsExistingCustomer(false);
+        // Clear name/address if previously was an existing customer but now mobile changed to new
+        if (isExistingCustomer) {
+          setCustomer({ mobile: customer.mobile, name: '', address: '' });
+        }
       }
+    } else {
+      setIsExistingCustomer(false);
     }
   }, [customer.mobile]);
 
@@ -338,10 +348,16 @@ export default function NewInvoice() {
 
         <div className="space-y-6">
           <Card className="border-none shadow-md">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-headline flex items-center gap-2">
                 <User className="h-5 w-5" /> Customer Details
               </CardTitle>
+              {customer.mobile?.length === 10 && (
+                <Badge variant={isExistingCustomer ? "secondary" : "outline"} className={isExistingCustomer ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>
+                  {isExistingCustomer ? <UserCheck className="h-3 w-3 mr-1" /> : <UserPlus className="h-3 w-3 mr-1" />}
+                  {isExistingCustomer ? "Existing" : "New Shopper"}
+                </Badge>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -364,6 +380,7 @@ export default function NewInvoice() {
                   placeholder="Full Name" 
                   value={customer.name}
                   onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                  disabled={isExistingCustomer}
                 />
               </div>
               <div className="space-y-2">
@@ -373,8 +390,14 @@ export default function NewInvoice() {
                   placeholder="City/Area" 
                   value={customer.address}
                   onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
+                  disabled={isExistingCustomer}
                 />
               </div>
+              {isExistingCustomer && (
+                <Button variant="ghost" size="sm" className="text-xs text-secondary p-0" onClick={() => setIsExistingCustomer(false)}>
+                  Not {customer.name}? Click here to add as new customer
+                </Button>
+              )}
             </CardContent>
           </Card>
 

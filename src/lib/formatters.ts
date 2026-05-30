@@ -1,10 +1,9 @@
 
 export const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+  const formatted = new Intl.NumberFormat('en-IN', {
     maximumFractionDigits: 0,
   }).format(amount);
+  return `Rs ${formatted}`;
 };
 
 export const formatDate = (dateString: string) => {
