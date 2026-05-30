@@ -36,10 +36,6 @@ export default function NewInvoice() {
         loadSuggestions(existing);
       } else {
         setIsExistingCustomer(false);
-        // Clear name/address if user starts typing a new mobile but was previously on an existing customer
-        if (customer.name && existing === undefined) {
-           // allow editing for new customers
-        }
       }
     } else {
       setIsExistingCustomer(false);
@@ -63,7 +59,7 @@ export default function NewInvoice() {
       });
       setAiSuggestions(suggestions.suggestions);
     } catch (e) {
-      console.error(e);
+      console.error("AI Error:", e);
     }
   };
 
@@ -117,30 +113,39 @@ export default function NewInvoice() {
 
   const generatePDFFile = async (): Promise<File | null> => {
     try {
+      // Dynamic imports to prevent SSR errors
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).default;
       
       const docElement = document.getElementById('invoice-document');
-      if (!docElement) return null;
+      if (!docElement) {
+        toast({ variant: "destructive", title: "Export Error", description: "Invoice template not found." });
+        return null;
+      }
 
-      // Ensure component is fully rendered for capture
+      // Capture with higher scale for mobile quality
       const canvas = await html2canvas(docElement, { 
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.getElementById('invoice-document');
+          if (el) el.style.display = 'block';
+        }
       });
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgData = canvas.toDataURL('image/jpeg', 0.9);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       const pdfBlob = pdf.output('blob');
-      return new File([pdfBlob], `${successInvoice?.invoiceNumber}.pdf`, { type: 'application/pdf' });
+      return new File([pdfBlob], `${successInvoice?.invoiceNumber || 'invoice'}.pdf`, { type: 'application/pdf' });
     } catch (err) {
       console.error("PDF generation error:", err);
+      toast({ variant: "destructive", title: "PDF Failed", description: "Could not generate file." });
       return null;
     }
   };
@@ -154,8 +159,6 @@ export default function NewInvoice() {
       a.download = file.name;
       a.click();
       URL.revokeObjectURL(url);
-    } else {
-      toast({ variant: "destructive", title: "Export Failed", description: "Could not generate PDF." });
     }
   };
 
@@ -165,6 +168,7 @@ export default function NewInvoice() {
     const file = await generatePDFFile();
     const message = `Dear ${successInvoice.customerName},\n\nThank you for shopping with ISRA Ethnics.\n\nYour invoice ${successInvoice.invoiceNumber} is attached.\n\nHappy Shopping!`;
 
+    // Try Web Share API first (best for PWA on Android)
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({
@@ -172,18 +176,16 @@ export default function NewInvoice() {
           title: `Invoice ${successInvoice.invoiceNumber}`,
           text: message
         });
+        return;
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
-          shareWhatsAppFallback(message);
+          console.error("Share error:", err);
         }
       }
-    } else {
-      shareWhatsAppFallback(message);
     }
-  };
-
-  const shareWhatsAppFallback = (message: string) => {
-    window.open(`https://wa.me/91${successInvoice?.customerMobile}?text=${encodeURIComponent(message)}`, '_blank');
+    
+    // Fallback to WhatsApp link
+    window.open(`https://wa.me/91${successInvoice.customerMobile}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   if (successInvoice) {
@@ -227,7 +229,8 @@ export default function NewInvoice() {
             </div>
           </div>
 
-          <div style={{ position: 'fixed', left: '-9999px', top: 0 }}>
+          {/* This element is rendered off-screen but available for capture */}
+          <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <InvoicePDF 
               invoice={successInvoice} 
               settings={{
