@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone, UserCheck, UserPlus } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone, UserCheck, UserPlus, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { INITIAL_PRODUCTS, INITIAL_CUSTOMERS } from '@/lib/mock-data';
@@ -36,7 +36,6 @@ export default function NewInvoice() {
         loadSuggestions(existing);
       } else {
         setIsExistingCustomer(false);
-        // Clear name/address if previously was an existing customer but now mobile changed to new
         if (isExistingCustomer) {
           setCustomer({ mobile: customer.mobile, name: '', address: '' });
         }
@@ -115,39 +114,73 @@ export default function NewInvoice() {
     setIsGenerating(false);
   };
 
-  const downloadPDF = async () => {
+  const generatePDFFile = async (): Promise<File | null> => {
     try {
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).default;
       
-      const doc = document.getElementById('invoice-document');
-      if (!doc) {
-        toast({ variant: "destructive", title: "Export Error", description: "Invoice document not found." });
-        return;
-      }
+      const docElement = document.getElementById('invoice-document');
+      if (!docElement) return null;
 
-      const canvas = await html2canvas(doc, { 
+      const canvas = await html2canvas(docElement, { 
         scale: 2,
         useCORS: true,
-        logging: false,
         backgroundColor: '#ffffff'
       });
       
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${successInvoice?.invoiceNumber}.pdf`);
+      const pdfBlob = pdf.output('blob');
+      return new File([pdfBlob], `${successInvoice?.invoiceNumber}.pdf`, { type: 'application/pdf' });
     } catch (err) {
       console.error("PDF generation error:", err);
-      toast({ variant: "destructive", title: "Export Failed", description: "Could not generate PDF. Please try again." });
+      return null;
     }
   };
 
-  const shareWhatsApp = () => {
-    const message = `Dear ${successInvoice?.customerName}, Thank you for shopping with ISRA Ethnics. Your invoice ${successInvoice?.invoiceNumber} for ${formatCurrency(successInvoice?.grandTotal || 0)} is ready. Happy Shopping! @isra.ethnic`;
+  const downloadPDF = async () => {
+    const file = await generatePDFFile();
+    if (file) {
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      toast({ variant: "destructive", title: "Export Failed", description: "Could not generate PDF." });
+    }
+  };
+
+  const handleShare = async () => {
+    if (!successInvoice) return;
+
+    const file = await generatePDFFile();
+    const message = `Dear ${successInvoice.customerName},\n\nThank you for shopping with ISRA Ethnics.\n\nAttached the pdf created as invoice.\n\nHappy Shopping!`;
+
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: `Invoice ${successInvoice.invoiceNumber}`,
+          text: message
+        });
+      } catch (err) {
+        // User cancelled or error, fallback to WhatsApp text
+        if ((err as Error).name !== 'AbortError') {
+          shareWhatsAppFallback(message);
+        }
+      }
+    } else {
+      shareWhatsAppFallback(message);
+    }
+  };
+
+  const shareWhatsAppFallback = (message: string) => {
     window.open(`https://wa.me/91${successInvoice?.customerMobile}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
@@ -161,6 +194,7 @@ export default function NewInvoice() {
             </div>
             <h1 className="text-3xl font-headline font-bold text-primary">Invoice Created Successfully</h1>
             <p className="text-muted-foreground">Order Ref: <span className="font-bold text-primary">{successInvoice.invoiceNumber}</span></p>
+            
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
                <div className="p-4 bg-white rounded-lg shadow-sm">
                   <p className="text-xs text-muted-foreground uppercase">Customer</p>
@@ -179,14 +213,17 @@ export default function NewInvoice() {
                   <p className="font-bold">{successInvoice.date}</p>
                </div>
             </div>
+
             <div className="flex flex-wrap gap-4 justify-center mt-8">
               <Button onClick={downloadPDF} size="lg" className="bg-primary shadow-lg">Download PDF</Button>
-              <Button onClick={shareWhatsApp} size="lg" className="bg-[#25D366] hover:bg-[#25D366]/90 shadow-lg">Send via WhatsApp</Button>
+              <Button onClick={handleShare} size="lg" className="bg-[#25D366] hover:bg-[#25D366]/90 shadow-lg">
+                <Share2 className="h-4 w-4 mr-2" /> Share via WhatsApp
+              </Button>
               <Button variant="outline" size="lg" onClick={() => setSuccessInvoice(null)}>Create New Invoice</Button>
             </div>
           </div>
 
-          <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+          <div style={{ position: 'fixed', left: '-9999px', top: 0 }}>
             <InvoicePDF 
               invoice={successInvoice} 
               settings={{
