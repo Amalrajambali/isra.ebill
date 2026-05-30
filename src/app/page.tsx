@@ -5,7 +5,7 @@ import React from 'react';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Package, IndianRupee, TrendingUp, AlertCircle, ShoppingBag } from 'lucide-react';
+import { Users, Package, IndianRupee, AlertCircle, ShoppingBag } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { INITIAL_PRODUCTS, INITIAL_INVOICES, INITIAL_CUSTOMERS } from '@/lib/mock-data';
 import Link from 'next/link';
@@ -35,7 +35,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-none shadow-md bg-white">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -80,7 +79,6 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Recent Invoices */}
           <Card className="border-none shadow-md">
             <CardHeader>
               <CardTitle className="font-headline">Recent Sales</CardTitle>
@@ -106,7 +104,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Low Stock Items */}
           <Card className="border-none shadow-md">
             <CardHeader>
               <CardTitle className="font-headline">Inventory Alerts</CardTitle>

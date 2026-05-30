@@ -15,8 +15,7 @@ import { InvoiceItem, Customer, Product, Invoice } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { InvoicePDF } from '@/components/invoice/InvoicePDF';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { cn } from '@/lib/utils';
 
 export default function NewInvoice() {
   const { toast } = useToast();
@@ -43,7 +42,6 @@ export default function NewInvoice() {
 
   const loadSuggestions = async (cust: Customer) => {
     try {
-      // Mock history for demo as provided by flow definition
       const suggestions = await customerPurchaseSuggestions({
         customerId: cust.id,
         purchaseHistory: [
@@ -107,12 +105,14 @@ export default function NewInvoice() {
       grandTotal
     };
 
-    // Store in localStorage or state for success view
     setSuccessInvoice(invoice);
     setIsGenerating(false);
   };
 
   const downloadPDF = async () => {
+    const html2canvas = (await import('html2canvas')).default;
+    const jsPDF = (await import('jspdf')).default;
+    
     const doc = document.getElementById('invoice-document');
     if (!doc) return;
     const canvas = await html2canvas(doc, { scale: 2 });
@@ -185,7 +185,6 @@ export default function NewInvoice() {
   return (
     <Shell>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-20">
-        {/* Left Side: Invoice Items */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="border-none shadow-md">
             <CardHeader className="flex flex-row items-center justify-between">
@@ -220,7 +219,6 @@ export default function NewInvoice() {
                 )}
               </div>
 
-              {/* Items List */}
               <div className="space-y-4">
                 {items.length === 0 ? (
                   <div className="py-12 text-center text-muted-foreground bg-slate-50 rounded-xl border-2 border-dashed">
@@ -291,7 +289,6 @@ export default function NewInvoice() {
             </CardContent>
           </Card>
 
-          {/* AI Suggestions Section */}
           {aiSuggestions.length > 0 && (
             <Card className="border-none shadow-md bg-white overflow-hidden">
                <div className="bg-primary/5 p-4 flex items-center justify-between">
@@ -327,7 +324,6 @@ export default function NewInvoice() {
           )}
         </div>
 
-        {/* Right Side: Checkout Summary */}
         <div className="space-y-6">
           <Card className="border-none shadow-md">
             <CardHeader>
