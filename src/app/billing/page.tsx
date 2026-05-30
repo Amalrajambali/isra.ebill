@@ -150,11 +150,16 @@ export default function NewInvoice() {
     }
   };
 
+  const buildWhatsAppMessage = () =>
+    `Dear Customer, Thank you for shopping with ISRA Ethnics. Your invoice is attached. Happy Shopping! insta id @isra.ethnic`;
+
   const handleShare = async () => {
     if (!successInvoice) return;
 
     const file = await generatePDFFile();
-    const message = `Dear ${successInvoice.customerName},\n\nThank you for shopping with ISRA Ethnics.\n\nYour invoice ${successInvoice.invoiceNumber} is attached.\n\nHappy Shopping!`;
+    const message = buildWhatsAppMessage();
+    const mobile = successInvoice.customerMobile.replace(/\D/g, '');
+    const whatsappUrl = `https://wa.me/91${mobile}?text=${encodeURIComponent(message)}`;
 
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -172,7 +177,7 @@ export default function NewInvoice() {
     }
     
     // Fallback if sharing files is not supported
-    window.open(`https://wa.me/91${successInvoice.customerMobile}?text=${encodeURIComponent(message)}`, '_blank');
+    window.open(whatsappUrl, '_blank');
   };
 
   if (successInvoice) {

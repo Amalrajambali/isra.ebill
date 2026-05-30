@@ -75,7 +75,7 @@ export default function SettingsPage() {
                   <Textarea 
                     id="thankyou" 
                     rows={4} 
-                    defaultValue="Dear Customer, Thank you for shopping with ISRA Ethnics. Your invoice is attached. Happy Shopping!" 
+                    defaultValue="Dear Customer, Thank you for shopping with ISRA Ethnics. Your invoice is attached. Happy Shopping! insta id @isra.ethnic" 
                   />
                </div>
                <div className="p-4 bg-secondary/5 rounded-lg flex gap-3 text-secondary">

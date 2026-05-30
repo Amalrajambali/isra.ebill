@@ -98,7 +98,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, settings }) => 
       <div className="border-t pt-8 mt-auto">
         <div className="text-center space-y-4">
           <div className="font-serif italic text-lg text-primary">
-            "Thank you for shopping with ISRA Ethnics. Happy Shopping!"
+            "Dear Customer, Thank you for shopping with ISRA Ethnics. Your invoice is attached. Happy Shopping! insta id @isra.ethnic"
           </div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
             Visit us again for the latest Saree & Churidar collections
