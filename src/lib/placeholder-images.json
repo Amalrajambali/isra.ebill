@@ -1,3 +1,22 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "saree-1",
+      "description": "Elegant Silk Saree",
+      "imageUrl": "https://picsum.photos/seed/saree1/400/600",
+      "imageHint": "silk saree"
+    },
+    {
+      "id": "churidar-1",
+      "description": "Designer Churidar Suit",
+      "imageUrl": "https://picsum.photos/seed/churidar1/400/600",
+      "imageHint": "churidar suit"
+    },
+    {
+      "id": "kurti-1",
+      "description": "Cotton Embroidered Kurti",
+      "imageUrl": "https://picsum.photos/seed/kurti1/400/600",
+      "imageHint": "indian kurti"
+    }
+  ]
 }
