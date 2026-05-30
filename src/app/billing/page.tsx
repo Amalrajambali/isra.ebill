@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -26,15 +25,12 @@ export default function NewInvoice() {
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [successInvoice, setSuccessInvoice] = useState<Invoice | null>(null);
 
-  // Quick lookup customer
   useEffect(() => {
     if (customer.mobile?.length === 10) {
       const existing = INITIAL_CUSTOMERS.find(c => c.mobile === customer.mobile);
       if (existing) {
         setCustomer(existing);
         toast({ title: "Customer Recognized", description: `Welcome back, ${existing.name}!` });
-        
-        // Load AI suggestions
         loadSuggestions(existing);
       }
     }
@@ -110,18 +106,34 @@ export default function NewInvoice() {
   };
 
   const downloadPDF = async () => {
-    const html2canvas = (await import('html2canvas')).default;
-    const jsPDF = (await import('jspdf')).default;
-    
-    const doc = document.getElementById('invoice-document');
-    if (!doc) return;
-    const canvas = await html2canvas(doc, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`${successInvoice?.invoiceNumber}.pdf`);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+      
+      const doc = document.getElementById('invoice-document');
+      if (!doc) {
+        toast({ variant: "destructive", title: "Export Error", description: "Invoice document not found." });
+        return;
+      }
+
+      const canvas = await html2canvas(doc, { 
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${successInvoice?.invoiceNumber}.pdf`);
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      toast({ variant: "destructive", title: "Export Failed", description: "Could not generate PDF. Please try again." });
+    }
   };
 
   const shareWhatsApp = () => {
@@ -164,7 +176,7 @@ export default function NewInvoice() {
             </div>
           </div>
 
-          <div className="hidden">
+          <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
             <InvoicePDF 
               invoice={successInvoice} 
               settings={{
