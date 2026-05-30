@@ -2,7 +2,7 @@
 {
   "name": "ISRA EthniConnect",
   "short_name": "ISRA",
-  "description": "Boutique Billing and Inventory System",
+  "description": "Premium Billing and Inventory System for ISRA Ethnics",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -11,12 +11,14 @@
     {
       "src": "https://picsum.photos/seed/isra192/192/192",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "https://picsum.photos/seed/isra512/512/512",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

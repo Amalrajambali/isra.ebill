@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone, UserCheck, UserPlus, Share2 } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone, UserCheck, UserPlus, Share2, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { INITIAL_PRODUCTS, INITIAL_CUSTOMERS } from '@/lib/mock-data';
@@ -32,12 +32,13 @@ export default function NewInvoice() {
       if (existing) {
         setCustomer(existing);
         setIsExistingCustomer(true);
-        toast({ title: "Customer Found", description: `Recognized: ${existing.name}` });
+        toast({ title: "Customer Recognized", description: `Welcome back, ${existing.name}!` });
         loadSuggestions(existing);
       } else {
         setIsExistingCustomer(false);
-        if (isExistingCustomer) {
-          setCustomer({ mobile: customer.mobile, name: '', address: '' });
+        // Clear name/address if user starts typing a new mobile but was previously on an existing customer
+        if (customer.name && existing === undefined) {
+           // allow editing for new customers
         }
       }
     } else {
@@ -122,10 +123,12 @@ export default function NewInvoice() {
       const docElement = document.getElementById('invoice-document');
       if (!docElement) return null;
 
+      // Ensure component is fully rendered for capture
       const canvas = await html2canvas(docElement, { 
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        logging: false
       });
       
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -160,7 +163,7 @@ export default function NewInvoice() {
     if (!successInvoice) return;
 
     const file = await generatePDFFile();
-    const message = `Dear ${successInvoice.customerName},\n\nThank you for shopping with ISRA Ethnics.\n\nAttached the pdf created as invoice.\n\nHappy Shopping!`;
+    const message = `Dear ${successInvoice.customerName},\n\nThank you for shopping with ISRA Ethnics.\n\nYour invoice ${successInvoice.invoiceNumber} is attached.\n\nHappy Shopping!`;
 
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -170,7 +173,6 @@ export default function NewInvoice() {
           text: message
         });
       } catch (err) {
-        // User cancelled or error, fallback to WhatsApp text
         if ((err as Error).name !== 'AbortError') {
           shareWhatsAppFallback(message);
         }
@@ -192,7 +194,7 @@ export default function NewInvoice() {
             <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
               <Save className="h-8 w-8" />
             </div>
-            <h1 className="text-3xl font-headline font-bold text-primary">Invoice Created Successfully</h1>
+            <h1 className="text-3xl font-headline font-bold text-primary">Invoice Generated</h1>
             <p className="text-muted-foreground">Order Ref: <span className="font-bold text-primary">{successInvoice.invoiceNumber}</span></p>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
@@ -215,9 +217,11 @@ export default function NewInvoice() {
             </div>
 
             <div className="flex flex-wrap gap-4 justify-center mt-8">
-              <Button onClick={downloadPDF} size="lg" className="bg-primary shadow-lg">Download PDF</Button>
-              <Button onClick={handleShare} size="lg" className="bg-[#25D366] hover:bg-[#25D366]/90 shadow-lg">
-                <Share2 className="h-4 w-4 mr-2" /> Share via WhatsApp
+              <Button onClick={downloadPDF} size="lg" className="bg-primary shadow-lg">
+                <Download className="h-4 w-4 mr-2" /> Download PDF
+              </Button>
+              <Button onClick={handleShare} size="lg" className="bg-[#25D366] hover:bg-[#25D366]/90 shadow-lg text-white">
+                <Share2 className="h-4 w-4 mr-2" /> Share to WhatsApp
               </Button>
               <Button variant="outline" size="lg" onClick={() => setSuccessInvoice(null)}>Create New Invoice</Button>
             </div>
@@ -254,7 +258,7 @@ export default function NewInvoice() {
               <div className="relative mb-6">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Search products by name or category..." 
+                  placeholder="Search products..." 
                   className="pl-10 h-12"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -387,7 +391,7 @@ export default function NewInvoice() {
           <Card className="border-none shadow-md">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-headline flex items-center gap-2">
-                <User className="h-5 w-5" /> Customer Details
+                <User className="h-5 w-5" /> Customer Info
               </CardTitle>
               {customer.mobile?.length === 10 && (
                 <Badge variant={isExistingCustomer ? "secondary" : "outline"} className={isExistingCustomer ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>
@@ -403,7 +407,7 @@ export default function NewInvoice() {
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     id="mobile" 
-                    placeholder="Search mobile..." 
+                    placeholder="10 digit mobile..." 
                     className="pl-10"
                     value={customer.mobile}
                     onChange={(e) => setCustomer({ ...customer, mobile: e.target.value })}
@@ -431,8 +435,11 @@ export default function NewInvoice() {
                 />
               </div>
               {isExistingCustomer && (
-                <Button variant="ghost" size="sm" className="text-xs text-secondary p-0" onClick={() => setIsExistingCustomer(false)}>
-                  Not {customer.name}? Click here to add as new customer
+                <Button variant="ghost" size="sm" className="text-xs text-secondary p-0" onClick={() => {
+                   setIsExistingCustomer(false);
+                   setCustomer({ ...customer, name: '', address: '', id: 'new' });
+                }}>
+                  Not {customer.name}? Add as new customer
                 </Button>
               )}
             </CardContent>
@@ -458,11 +465,11 @@ export default function NewInvoice() {
                 <span className="text-3xl font-bold text-secondary">{formatCurrency(grandTotal)}</span>
               </div>
               <Button 
-                className="w-full bg-secondary hover:bg-secondary/90 h-14 text-lg shadow-xl"
+                className="w-full bg-secondary hover:bg-secondary/90 h-14 text-lg shadow-xl text-white"
                 onClick={handleGenerateInvoice}
                 disabled={isGenerating}
               >
-                {isGenerating ? "Processing..." : "Complete & Generate Invoice"}
+                {isGenerating ? "Processing..." : "Generate Invoice"}
               </Button>
             </CardContent>
           </Card>
