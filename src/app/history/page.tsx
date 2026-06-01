@@ -11,7 +11,7 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
-import { buildPublicInvoiceUrl, deleteInvoice, listInvoices } from '@/lib/invoice-api';
+import { deleteInvoice, listInvoices } from '@/lib/invoice-api';
 import type { Invoice } from '@/lib/types';
 
 export default function InvoiceHistory() {
@@ -39,13 +39,30 @@ export default function InvoiceHistory() {
     inv.invoiceNumber.toLowerCase().includes(deferredSearchTerm.toLowerCase())
   ), [invoices, deferredSearchTerm]);
 
-  const openPdf = (invoice: Invoice, download = false) => {
-    const url = `${buildPublicInvoiceUrl(window.location.origin, invoice.invoiceNumber)}${download ? '?download=1' : ''}`;
-    window.open(url, '_blank', 'noreferrer');
+  const openPdf = (invoice: Invoice) => {
+    if (!invoice.pdfUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'PDF not available',
+        description: 'This invoice has not finished uploading its public PDF yet.',
+      });
+      return;
+    }
+
+    window.open(invoice.pdfUrl, '_blank', 'noreferrer');
   };
 
   const resendWhatsApp = async (invoice: Invoice) => {
-    const message = buildShareMessage(invoice, window.location.origin);
+    if (!invoice.pdfUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'PDF not available',
+        description: 'The public PDF URL is missing for this invoice.',
+      });
+      return;
+    }
+
+    const message = buildShareMessage(invoice);
     window.open(buildWhatsAppUrl(invoice.customerMobile, message), '_blank', 'noreferrer');
   };
 
@@ -118,8 +135,8 @@ export default function InvoiceHistory() {
                       </td>
                       <td className="p-4 text-right">
                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" title="View Details" onClick={() => openPdf(inv)}><Eye className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" title="Download PDF" onClick={() => openPdf(inv, true)}><Download className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="View PDF" onClick={() => openPdf(inv)}><Eye className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Open PDF" onClick={() => openPdf(inv)}><Download className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" title="Send WhatsApp" className="text-[#25D366]" onClick={() => resendWhatsApp(inv)}><MessageSquare className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" title="Delete Invoice" className="text-destructive" onClick={() => removeInvoice(inv)}><Trash2 className="h-4 w-4" /></Button>
                          </div>

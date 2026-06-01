@@ -93,6 +93,3 @@ export async function deleteInvoice(invoiceNumber: string): Promise<Invoice[]> {
     return removeLocalInvoice(invoiceNumber);
   }
 }
-
-export const buildPublicInvoiceUrl = (origin: string, invoiceNumber: string) =>
-  `${origin}/invoice/${encodeURIComponent(invoiceNumber)}`;

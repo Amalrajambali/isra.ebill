@@ -41,6 +41,9 @@ export interface Invoice {
   subtotal: number;
   totalDiscount: number;
   grandTotal: number;
+  pdfUrl?: string;
+  pdfPublicId?: string;
+  pdfUploadStatus?: 'pending' | 'uploaded' | 'failed';
 }
 
 export interface ShopSettings {
