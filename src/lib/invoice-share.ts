@@ -1,6 +1,5 @@
 import type { Invoice } from '@/lib/types';
-
-export const formatWhatsAppAmount = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
+import { buildInvoiceUrl } from '@/lib/invoice-store';
 
 export const normalizeWhatsAppNumber = (customerMobile: string) => {
   const digits = customerMobile.replace(/\D/g, '');
@@ -16,13 +15,25 @@ export const normalizeWhatsAppNumber = (customerMobile: string) => {
   return digits;
 };
 
-export const buildInvoicePdfPayload = (invoice: Invoice) => encodeURIComponent(JSON.stringify(invoice));
+export const formatWhatsAppAmount = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
 
-export const buildInvoicePdfUrl = (origin: string, invoice: Invoice) =>
-  `${origin}/api/invoices/pdf?payload=${buildInvoicePdfPayload(invoice)}`;
+export const buildShareMessage = (invoice: Invoice, origin: string) => {
+  const invoiceUrl = buildInvoiceUrl(origin, invoice.invoiceNumber);
 
-export const buildWhatsAppMessage = (invoice: Invoice, pdfDownloadUrl: string) =>
-  `Dear Customer, Thank you for shopping with ISRA Ethnics.\n\nInvoice No: ${invoice.invoiceNumber}\n\nAmount: ${formatWhatsAppAmount(invoice.grandTotal)}\n\nDownload Invoice:\n${pdfDownloadUrl}`;
+  return [
+    '✨ Thank you for shopping with ISRA Ethnics!',
+    '',
+    `🧾 Invoice: ${invoice.invoiceNumber}`,
+    `💰 Amount: ${formatWhatsAppAmount(invoice.grandTotal)}`,
+    '',
+    '📄 Download Invoice:',
+    invoiceUrl,
+    '',
+    'Happy Shopping! 💖',
+    '',
+    '📸 Instagram: @isra.ethnic',
+  ].join('\n');
+};
 
 export const buildWhatsAppUrl = (customerMobile: string, message: string) => {
   const mobile = normalizeWhatsAppNumber(customerMobile);

@@ -9,25 +9,35 @@ import { Label } from '@/components/ui/label';
 import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone, UserCheck, UserPlus, Share2, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
-import { INITIAL_PRODUCTS, INITIAL_CUSTOMERS } from '@/lib/mock-data';
+import { INITIAL_CUSTOMERS } from '@/lib/mock-data';
 import { InvoiceItem, Customer, Product, Invoice } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { InvoicePDF } from '@/components/invoice/InvoicePDF';
-import { buildInvoicePdfUrl, buildWhatsAppMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
+import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
+import { buildInvoiceUrl, loadInvoices, saveInvoice } from '@/lib/invoice-store';
+import { loadProducts } from '@/lib/product-store';
 
 export default function NewInvoice() {
   const { toast } = useToast();
   const [customer, setCustomer] = useState<Partial<Customer>>({ name: '', mobile: '', address: '' });
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
+  const [products, setProducts] = useState<Product[]>(() => loadProducts());
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [successInvoice, setSuccessInvoice] = useState<Invoice | null>(null);
-  const [pdfDownloadUrl, setPdfDownloadUrl] = useState('');
+  const [invoiceUrl, setInvoiceUrl] = useState('');
   const [isPdfReady, setIsPdfReady] = useState(false);
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
+
+  useEffect(() => {
+    setProducts(loadProducts());
+    const onStorage = () => setProducts(loadProducts());
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   useEffect(() => {
     if (customer.mobile?.length === 10) {
@@ -47,8 +57,9 @@ export default function NewInvoice() {
 
   useEffect(() => {
     if (!successInvoice || typeof window === 'undefined') {
-      setPdfDownloadUrl('');
+      setInvoiceUrl('');
       setIsPdfReady(false);
+      setIsPreparingPdf(false);
       return;
     }
 
@@ -56,21 +67,19 @@ export default function NewInvoice() {
       setIsPreparingPdf(true);
       setIsPdfReady(false);
 
-      const url = buildInvoicePdfUrl(window.location.origin, successInvoice);
-      const response = await fetch(url);
-
-      if (!response.ok) {
+      const file = await generatePDFFile(successInvoice);
+      if (!file) {
         throw new Error('PDF generation failed');
       }
 
-      setPdfDownloadUrl(url);
+      setInvoiceUrl(buildInvoiceUrl(window.location.origin, successInvoice.invoiceNumber));
       setIsPdfReady(true);
       setIsPreparingPdf(false);
     };
 
     preparePdf().catch((err) => {
       console.error('PDF generation error:', err);
-      setPdfDownloadUrl('');
+      setInvoiceUrl('');
       setIsPdfReady(false);
       setIsPreparingPdf(false);
       toast({
@@ -81,6 +90,45 @@ export default function NewInvoice() {
     });
   }, [successInvoice, toast]);
 
+  const generateUniqueInvoiceNumber = () => {
+    const existingNumbers = new Set(loadInvoices().map((invoice) => invoice.invoiceNumber));
+    let candidate = '';
+
+    do {
+      candidate = `ISRA-${Math.floor(1000 + Math.random() * 9000)}`;
+    } while (existingNumbers.has(candidate));
+
+    return candidate;
+  };
+
+  const generatePDFFile = async (invoice: Invoice): Promise<File | null> => {
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+
+      const docElement = document.getElementById('invoice-document');
+      if (!docElement) return null;
+
+      const canvas = await html2canvas(docElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      const pdfBlob = pdf.output('blob');
+      return new File([pdfBlob], `${invoice.invoiceNumber}.pdf`, { type: 'application/pdf' });
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      return null;
+    }
+  };
+
   const loadSuggestions = async (cust: Customer) => {
     try {
       const suggestions = await customerPurchaseSuggestions({
@@ -88,7 +136,7 @@ export default function NewInvoice() {
         purchaseHistory: [
           { productId: '1', productName: 'Banarasi Silk Saree', category: 'Saree', quantity: 1, price: 4500 }
         ],
-        currentInventory: INITIAL_PRODUCTS.map(p => ({
+        currentInventory: products.map(p => ({
           productId: p.id,
           productName: p.name,
           category: p.category,
@@ -132,9 +180,12 @@ export default function NewInvoice() {
     }
 
     setIsGenerating(true);
+    setIsPdfReady(false);
+    setIsPreparingPdf(true);
+    setInvoiceUrl('');
     const invoice: Invoice = {
       id: Math.random().toString(36).substr(2, 9),
-      invoiceNumber: `ISRA-${Math.floor(1000 + Math.random() * 9000)}`,
+      invoiceNumber: generateUniqueInvoiceNumber(),
       date: new Date().toISOString().split('T')[0],
       customerId: customer.id || 'new',
       customerName: customer.name!,
@@ -146,12 +197,17 @@ export default function NewInvoice() {
       grandTotal
     };
 
+    saveInvoice(invoice);
     setSuccessInvoice(invoice);
     setIsGenerating(false);
   };
 
   const downloadPDF = async () => {
-    if (!pdfDownloadUrl) {
+    if (!successInvoice) return;
+
+    const file = await generatePDFFile(successInvoice);
+
+    if (!file) {
       toast({
         variant: 'destructive',
         title: 'PDF Not Ready',
@@ -160,13 +216,18 @@ export default function NewInvoice() {
       return;
     }
 
-    window.open(pdfDownloadUrl, '_blank');
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleShare = async () => {
     if (!successInvoice) return;
 
-    if (!isPdfReady || !pdfDownloadUrl) {
+    if (!isPdfReady || !invoiceUrl) {
       toast({
         variant: 'destructive',
         title: 'PDF Not Ready',
@@ -175,7 +236,7 @@ export default function NewInvoice() {
       return;
     }
 
-    const message = buildWhatsAppMessage(successInvoice, pdfDownloadUrl);
+    const message = buildShareMessage(successInvoice, window.location.origin);
     window.open(buildWhatsAppUrl(successInvoice.customerMobile, message), '_blank');
   };
 
@@ -263,7 +324,7 @@ export default function NewInvoice() {
                 />
                 {searchTerm && (
                   <div className="absolute z-10 w-full mt-2 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                    {INITIAL_PRODUCTS.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                    {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
                       <div 
                         key={p.id} 
                         className="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b"
@@ -362,7 +423,7 @@ export default function NewInvoice() {
                <CardContent className="p-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {aiSuggestions.map((sug, idx) => {
-                      const prod = INITIAL_PRODUCTS.find(p => p.id === sug.productId);
+                      const prod = products.find(p => p.id === sug.productId);
                       return prod ? (
                         <div key={idx} className="p-3 border rounded-lg hover:border-secondary transition-colors group">
                            <p className="font-bold text-sm truncate">{sug.productName}</p>

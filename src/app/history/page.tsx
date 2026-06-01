@@ -1,57 +1,58 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Filter, Eye, Download, MessageSquare, Calendar } from 'lucide-react';
-import { INITIAL_INVOICES } from '@/lib/mock-data';
+import { Search, Filter, Eye, Download, MessageSquare, Calendar, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { buildInvoicePdfUrl, buildWhatsAppMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
+import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
+import { buildInvoiceUrl, deleteInvoice, loadInvoices } from '@/lib/invoice-store';
+import type { Invoice } from '@/lib/types';
 
 export default function InvoiceHistory() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const { toast } = useToast();
 
-  const filtered = INITIAL_INVOICES.filter(inv => 
+  useEffect(() => {
+    setInvoices(loadInvoices());
+  }, []);
+
+  useEffect(() => {
+    const onStorage = () => setInvoices(loadInvoices());
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const filtered = useMemo(() => invoices.filter(inv => 
     inv.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
     inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ), [invoices, searchTerm]);
 
-  const openPdf = (invoice: (typeof INITIAL_INVOICES)[number], download = false) => {
-    const url = buildInvoicePdfUrl(window.location.origin, invoice);
-    if (download) {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${invoice.invoiceNumber}.pdf`;
-      link.target = '_blank';
-      link.rel = 'noreferrer';
-      link.click();
-      return;
-    }
-
+  const openPdf = (invoice: Invoice, download = false) => {
+    const url = `${buildInvoiceUrl(window.location.origin, invoice.invoiceNumber)}${download ? '?download=1' : ''}`;
     window.open(url, '_blank', 'noreferrer');
   };
 
-  const resendWhatsApp = async (invoice: (typeof INITIAL_INVOICES)[number]) => {
-    const pdfUrl = buildInvoicePdfUrl(window.location.origin, invoice);
-    const response = await fetch(pdfUrl);
-
-    if (!response.ok) {
-      toast({
-        variant: 'destructive',
-        title: 'PDF Not Ready',
-        description: 'This invoice PDF could not be generated, so WhatsApp resend is blocked.',
-      });
-      return;
-    }
-
-    const message = buildWhatsAppMessage(invoice, pdfUrl);
+  const resendWhatsApp = async (invoice: Invoice) => {
+    const message = buildShareMessage(invoice, window.location.origin);
     window.open(buildWhatsAppUrl(invoice.customerMobile, message), '_blank', 'noreferrer');
+  };
+
+  const removeInvoice = (invoice: Invoice) => {
+    if (!window.confirm(`Delete invoice ${invoice.invoiceNumber}?`)) return;
+
+    const next = deleteInvoice(invoice.invoiceNumber);
+    setInvoices(next);
+    toast({
+      title: 'Invoice deleted',
+      description: `${invoice.invoiceNumber} has been removed from history.`,
+    });
   };
 
   return (
@@ -115,6 +116,7 @@ export default function InvoiceHistory() {
                             <Button variant="ghost" size="icon" title="View Details" onClick={() => openPdf(inv)}><Eye className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" title="Download PDF" onClick={() => openPdf(inv, true)}><Download className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" title="Send WhatsApp" className="text-[#25D366]" onClick={() => resendWhatsApp(inv)}><MessageSquare className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Delete Invoice" className="text-destructive" onClick={() => removeInvoice(inv)}><Trash2 className="h-4 w-4" /></Button>
                          </div>
                       </td>
                     </tr>

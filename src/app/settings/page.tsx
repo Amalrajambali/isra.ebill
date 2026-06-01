@@ -75,7 +75,7 @@ export default function SettingsPage() {
                   <Textarea 
                     id="thankyou" 
                     rows={4} 
-                    defaultValue="Dear Customer, Thank you for shopping with ISRA Ethnics. Your invoice is attached. Happy Shopping! insta id @isra.ethnic" 
+                    defaultValue="✨ Thank you for shopping with ISRA Ethnics!\n\n🧾 Invoice: ISRA-2589\n💰 Amount: ₹4,500\n\n📄 Download Invoice:\nhttps://isra-ethnic.vercel.app/invoice/ISRA-2589\n\nHappy Shopping! 💖\n\n📸 Instagram: @isra.ethnic" 
                   />
                </div>
                <div className="p-4 bg-secondary/5 rounded-lg flex gap-3 text-secondary">
