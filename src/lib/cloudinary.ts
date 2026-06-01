@@ -21,7 +21,6 @@ export const uploadInvoicePdf = async (file: File, invoiceNumber: string) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', uploadPreset);
-  formData.append('public_id', invoiceNumber);
 
   const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`, {
     method: 'POST',
