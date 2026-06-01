@@ -14,6 +14,7 @@ import { InvoiceItem, Customer, Product, Invoice } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { InvoicePDF } from '@/components/invoice/InvoicePDF';
+import { buildInvoicePdfUrl, buildWhatsAppMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
 
 export default function NewInvoice() {
   const { toast } = useToast();
@@ -24,6 +25,9 @@ export default function NewInvoice() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [successInvoice, setSuccessInvoice] = useState<Invoice | null>(null);
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState('');
+  const [isPdfReady, setIsPdfReady] = useState(false);
+  const [isPreparingPdf, setIsPreparingPdf] = useState(false);
 
   useEffect(() => {
     if (customer.mobile?.length === 10) {
@@ -40,6 +44,42 @@ export default function NewInvoice() {
       setIsExistingCustomer(false);
     }
   }, [customer.mobile]);
+
+  useEffect(() => {
+    if (!successInvoice || typeof window === 'undefined') {
+      setPdfDownloadUrl('');
+      setIsPdfReady(false);
+      return;
+    }
+
+    const preparePdf = async () => {
+      setIsPreparingPdf(true);
+      setIsPdfReady(false);
+
+      const url = buildInvoicePdfUrl(window.location.origin, successInvoice);
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error('PDF generation failed');
+      }
+
+      setPdfDownloadUrl(url);
+      setIsPdfReady(true);
+      setIsPreparingPdf(false);
+    };
+
+    preparePdf().catch((err) => {
+      console.error('PDF generation error:', err);
+      setPdfDownloadUrl('');
+      setIsPdfReady(false);
+      setIsPreparingPdf(false);
+      toast({
+        variant: 'destructive',
+        title: 'PDF Generation Failed',
+        description: 'WhatsApp sharing is disabled until the invoice PDF is ready.',
+      });
+    });
+  }, [successInvoice, toast]);
 
   const loadSuggestions = async (cust: Customer) => {
     try {
@@ -110,74 +150,33 @@ export default function NewInvoice() {
     setIsGenerating(false);
   };
 
-  const generatePDFFile = async (): Promise<File | null> => {
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const jsPDF = (await import('jspdf')).default;
-      
-      const docElement = document.getElementById('invoice-document');
-      if (!docElement) return null;
-
-      const canvas = await html2canvas(docElement, { 
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff'
-      });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.9);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      const pdfBlob = pdf.output('blob');
-      return new File([pdfBlob], `${successInvoice?.invoiceNumber || 'invoice'}.pdf`, { type: 'application/pdf' });
-    } catch (err) {
-      console.error("PDF generation error:", err);
-      return null;
-    }
-  };
-
   const downloadPDF = async () => {
-    const file = await generatePDFFile();
-    if (file) {
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = file.name;
-      a.click();
-      URL.revokeObjectURL(url);
+    if (!pdfDownloadUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'PDF Not Ready',
+        description: 'Please wait until the invoice PDF finishes generating.',
+      });
+      return;
     }
-  };
 
-  const buildWhatsAppMessage = () =>
-    `Dear Customer, Thank you for shopping with ISRA Ethnics. Your invoice is attached. Happy Shopping! insta id @isra.ethnic`;
+    window.open(pdfDownloadUrl, '_blank');
+  };
 
   const handleShare = async () => {
     if (!successInvoice) return;
 
-    const file = await generatePDFFile();
-    const message = buildWhatsAppMessage();
-    const mobile = successInvoice.customerMobile.replace(/\D/g, '');
-    const whatsappUrl = `https://wa.me/91${mobile}?text=${encodeURIComponent(message)}`;
-
-    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          files: [file],
-          title: `Invoice ${successInvoice.invoiceNumber}`,
-          text: message
-        });
-        return;
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          console.error("Share error:", err);
-        }
-      }
+    if (!isPdfReady || !pdfDownloadUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'PDF Not Ready',
+        description: 'WhatsApp sharing is disabled until the invoice PDF succeeds.',
+      });
+      return;
     }
-    
-    // Fallback if sharing files is not supported
-    window.open(whatsappUrl, '_blank');
+
+    const message = buildWhatsAppMessage(successInvoice, pdfDownloadUrl);
+    window.open(buildWhatsAppUrl(successInvoice.customerMobile, message), '_blank');
   };
 
   if (successInvoice) {
@@ -211,11 +210,16 @@ export default function NewInvoice() {
             </div>
 
             <div className="flex flex-wrap gap-4 justify-center mt-8">
-              <Button onClick={downloadPDF} size="lg" className="bg-primary shadow-lg">
+              <Button onClick={downloadPDF} size="lg" className="bg-primary shadow-lg" disabled={!isPdfReady}>
                 <Download className="h-4 w-4 mr-2" /> Download PDF
               </Button>
-              <Button onClick={handleShare} size="lg" className="bg-[#25D366] hover:bg-[#25D366]/90 shadow-lg text-white">
-                <Share2 className="h-4 w-4 mr-2" /> Share to WhatsApp
+              <Button
+                onClick={handleShare}
+                size="lg"
+                className="bg-[#25D366] hover:bg-[#25D366]/90 shadow-lg text-white"
+                disabled={!isPdfReady || isPreparingPdf}
+              >
+                <Share2 className="h-4 w-4 mr-2" /> {isPreparingPdf ? 'Preparing PDF...' : 'Share to WhatsApp'}
               </Button>
               <Button variant="outline" size="lg" onClick={() => setSuccessInvoice(null)}>Create New Invoice</Button>
             </div>

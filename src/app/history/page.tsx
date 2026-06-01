@@ -10,14 +10,49 @@ import { Search, Filter, Eye, Download, MessageSquare, Calendar } from 'lucide-r
 import { INITIAL_INVOICES } from '@/lib/mock-data';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { buildInvoicePdfUrl, buildWhatsAppMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
 
 export default function InvoiceHistory() {
   const [searchTerm, setSearchTerm] = useState('');
+  const { toast } = useToast();
 
   const filtered = INITIAL_INVOICES.filter(inv => 
     inv.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
     inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const openPdf = (invoice: (typeof INITIAL_INVOICES)[number], download = false) => {
+    const url = buildInvoicePdfUrl(window.location.origin, invoice);
+    if (download) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${invoice.invoiceNumber}.pdf`;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+      link.click();
+      return;
+    }
+
+    window.open(url, '_blank', 'noreferrer');
+  };
+
+  const resendWhatsApp = async (invoice: (typeof INITIAL_INVOICES)[number]) => {
+    const pdfUrl = buildInvoicePdfUrl(window.location.origin, invoice);
+    const response = await fetch(pdfUrl);
+
+    if (!response.ok) {
+      toast({
+        variant: 'destructive',
+        title: 'PDF Not Ready',
+        description: 'This invoice PDF could not be generated, so WhatsApp resend is blocked.',
+      });
+      return;
+    }
+
+    const message = buildWhatsAppMessage(invoice, pdfUrl);
+    window.open(buildWhatsAppUrl(invoice.customerMobile, message), '_blank', 'noreferrer');
+  };
 
   return (
     <Shell>
@@ -77,9 +112,9 @@ export default function InvoiceHistory() {
                       </td>
                       <td className="p-4 text-right">
                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" title="View Details"><Eye className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" title="Download PDF"><Download className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" title="Send WhatsApp" className="text-[#25D366]"><MessageSquare className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="View Details" onClick={() => openPdf(inv)}><Eye className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Download PDF" onClick={() => openPdf(inv, true)}><Download className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Send WhatsApp" className="text-[#25D366]" onClick={() => resendWhatsApp(inv)}><MessageSquare className="h-4 w-4" /></Button>
                          </div>
                       </td>
                     </tr>
