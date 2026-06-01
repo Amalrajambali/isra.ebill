@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,19 +9,20 @@ import { Label } from '@/components/ui/label';
 import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone, UserCheck, UserPlus, Share2, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
-import { INITIAL_CUSTOMERS } from '@/lib/mock-data';
 import { InvoiceItem, Customer, Product, Invoice } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { InvoicePDF } from '@/components/invoice/InvoicePDF';
 import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
-import { buildInvoiceUrl, loadInvoices, saveInvoice } from '@/lib/invoice-store';
+import { buildPublicInvoiceUrl, listInvoices, upsertInvoice } from '@/lib/invoice-api';
 import { loadProducts } from '@/lib/product-store';
+import { addCustomer, findCustomerByMobile, loadCustomers, upsertCustomer } from '@/lib/customer-store';
 
 export default function NewInvoice() {
   const { toast } = useToast();
   const [customer, setCustomer] = useState<Partial<Customer>>({ name: '', mobile: '', address: '' });
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>(() => loadCustomers());
   const [products, setProducts] = useState<Product[]>(() => loadProducts());
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,29 +32,62 @@ export default function NewInvoice() {
   const [invoiceUrl, setInvoiceUrl] = useState('');
   const [isPdfReady, setIsPdfReady] = useState(false);
   const [isPreparingPdf, setIsPreparingPdf] = useState(false);
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const deferredCustomerName = useDeferredValue(customer.name ?? '');
+  const deferredCustomerMobile = useDeferredValue(customer.mobile ?? '');
+
+  const normalizedCustomerMobile = deferredCustomerMobile.replace(/\D/g, '');
+  const customerMatches = useMemo(() => {
+    const nameQuery = deferredCustomerName.trim().toLowerCase();
+
+    if (!nameQuery && !normalizedCustomerMobile) return [];
+
+    return customers.filter((item) => {
+      const nameMatch = nameQuery && item.name.toLowerCase().includes(nameQuery);
+      const mobileMatch = normalizedCustomerMobile && item.mobile.replace(/\D/g, '').includes(normalizedCustomerMobile);
+      return Boolean(nameMatch || mobileMatch);
+    });
+  }, [customers, deferredCustomerMobile, deferredCustomerName, normalizedCustomerMobile]);
+
+  const exactCustomerMatch = useMemo(() => {
+    const exactMobile = normalizedCustomerMobile ? findCustomerByMobile(normalizedCustomerMobile) : undefined;
+    if (exactMobile) return exactMobile;
+
+    const nameQuery = deferredCustomerName.trim().toLowerCase();
+    if (!nameQuery) return undefined;
+
+    return customers.find((item) => item.name.trim().toLowerCase() === nameQuery);
+  }, [customers, deferredCustomerName, normalizedCustomerMobile]);
 
   useEffect(() => {
     setProducts(loadProducts());
-    const onStorage = () => setProducts(loadProducts());
+    setCustomers(loadCustomers());
+    const onStorage = () => {
+      setProducts(loadProducts());
+      setCustomers(loadCustomers());
+    };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    const onFocus = () => {
+      setProducts(loadProducts());
+      setCustomers(loadCustomers());
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   useEffect(() => {
-    if (customer.mobile?.length === 10) {
-      const existing = INITIAL_CUSTOMERS.find(c => c.mobile === customer.mobile);
-      if (existing) {
-        setCustomer(existing);
-        setIsExistingCustomer(true);
-        toast({ title: "Customer Recognized", description: `Welcome back, ${existing.name}!` });
-        loadSuggestions(existing);
-      } else {
-        setIsExistingCustomer(false);
-      }
-    } else {
-      setIsExistingCustomer(false);
+    if (exactCustomerMatch) {
+      setCustomer(exactCustomerMatch);
+      setIsExistingCustomer(true);
+      loadSuggestions(exactCustomerMatch);
+      return;
     }
-  }, [customer.mobile]);
+
+    setIsExistingCustomer(false);
+  }, [exactCustomerMatch]);
 
   useEffect(() => {
     if (!successInvoice || typeof window === 'undefined') {
@@ -72,7 +106,7 @@ export default function NewInvoice() {
         throw new Error('PDF generation failed');
       }
 
-      setInvoiceUrl(buildInvoiceUrl(window.location.origin, successInvoice.invoiceNumber));
+      setInvoiceUrl(buildPublicInvoiceUrl(window.location.origin, successInvoice.invoiceNumber));
       setIsPdfReady(true);
       setIsPreparingPdf(false);
     };
@@ -90,8 +124,8 @@ export default function NewInvoice() {
     });
   }, [successInvoice, toast]);
 
-  const generateUniqueInvoiceNumber = () => {
-    const existingNumbers = new Set(loadInvoices().map((invoice) => invoice.invoiceNumber));
+  const generateUniqueInvoiceNumber = async () => {
+    const existingNumbers = new Set((await listInvoices()).map((invoice) => invoice.invoiceNumber));
     let candidate = '';
 
     do {
@@ -183,23 +217,76 @@ export default function NewInvoice() {
     setIsPdfReady(false);
     setIsPreparingPdf(true);
     setInvoiceUrl('');
+    const invoiceNumber = await generateUniqueInvoiceNumber();
+    const today = new Date().toISOString().split('T')[0];
+    const matchedCustomer =
+      exactCustomerMatch ??
+      customers.find((item) => item.name.trim().toLowerCase() === (customer.name ?? '').trim().toLowerCase()) ??
+      findCustomerByMobile(customer.mobile || '');
+
+    const savedCustomer = upsertCustomer({
+      id: matchedCustomer?.id,
+      name: customer.name!.trim(),
+      mobile: customer.mobile!.trim(),
+      address: customer.address?.trim() || matchedCustomer?.address || '',
+      notes: matchedCustomer?.notes,
+      totalOrders: (matchedCustomer?.totalOrders ?? 0) + 1,
+      lastPurchaseDate: today,
+    });
+
+    setCustomers(loadCustomers());
+    setCustomer(savedCustomer);
+    setIsExistingCustomer(true);
     const invoice: Invoice = {
       id: Math.random().toString(36).substr(2, 9),
-      invoiceNumber: generateUniqueInvoiceNumber(),
+      invoiceNumber,
       date: new Date().toISOString().split('T')[0],
-      customerId: customer.id || 'new',
-      customerName: customer.name!,
-      customerMobile: customer.mobile!,
-      customerAddress: customer.address || '',
+      customerId: savedCustomer.id,
+      customerName: savedCustomer.name,
+      customerMobile: savedCustomer.mobile,
+      customerAddress: savedCustomer.address || '',
       items,
       subtotal,
       totalDiscount,
       grandTotal
     };
 
-    saveInvoice(invoice);
+    await upsertInvoice(invoice);
     setSuccessInvoice(invoice);
     setIsGenerating(false);
+  };
+
+  const handleSelectCustomer = (selected: Customer) => {
+    setCustomer(selected);
+    setIsExistingCustomer(true);
+    loadSuggestions(selected);
+  };
+
+  const handleAddAsNewCustomer = () => {
+    if (!customer.name?.trim() || !customer.mobile?.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing details',
+        description: 'Enter customer name and mobile number first.',
+      });
+      return;
+    }
+
+    const saved = addCustomer({
+      name: customer.name.trim(),
+      mobile: customer.mobile.trim(),
+      address: customer.address?.trim() || '',
+      notes: '',
+    });
+
+    setCustomers(loadCustomers());
+    setCustomer(saved);
+    setIsExistingCustomer(true);
+    loadSuggestions(saved);
+    toast({
+      title: 'Customer added',
+      description: `${saved.name} is now saved in the registry.`,
+    });
   };
 
   const downloadPDF = async () => {
@@ -322,9 +409,9 @@ export default function NewInvoice() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                {searchTerm && (
+                {deferredSearchTerm && (
                   <div className="absolute z-10 w-full mt-2 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                    {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                    {products.filter(p => p.name.toLowerCase().includes(deferredSearchTerm.toLowerCase())).map(p => (
                       <div 
                         key={p.id} 
                         className="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b"
@@ -452,12 +539,12 @@ export default function NewInvoice() {
               <CardTitle className="font-headline flex items-center gap-2">
                 <User className="h-5 w-5" /> Customer Info
               </CardTitle>
-              {customer.mobile?.length === 10 && (
-                <Badge variant={isExistingCustomer ? "secondary" : "outline"} className={isExistingCustomer ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}>
+              {customer.name || customer.mobile ? (
+                <Badge variant={isExistingCustomer ? 'secondary' : 'outline'} className={isExistingCustomer ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}>
                   {isExistingCustomer ? <UserCheck className="h-3 w-3 mr-1" /> : <UserPlus className="h-3 w-3 mr-1" />}
-                  {isExistingCustomer ? "Existing" : "New Shopper"}
+                  {isExistingCustomer ? 'Registered' : 'New Customer'}
                 </Badge>
-              )}
+              ) : null}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -469,7 +556,7 @@ export default function NewInvoice() {
                     placeholder="10 digit mobile..." 
                     className="pl-10"
                     value={customer.mobile}
-                    onChange={(e) => setCustomer({ ...customer, mobile: e.target.value })}
+                    onChange={(e) => setCustomer({ ...customer, mobile: e.target.value.replace(/\D/g, '') })}
                   />
                 </div>
               </div>
@@ -480,7 +567,6 @@ export default function NewInvoice() {
                   placeholder="Full Name" 
                   value={customer.name}
                   onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                  disabled={isExistingCustomer}
                 />
               </div>
               <div className="space-y-2">
@@ -490,9 +576,49 @@ export default function NewInvoice() {
                   placeholder="City/Area" 
                   value={customer.address}
                   onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-                  disabled={isExistingCustomer}
                 />
               </div>
+
+              {(customer.name || customer.mobile) && (
+                <div className="rounded-xl border bg-slate-50 p-4 space-y-3">
+                  {customerMatches.length > 0 ? (
+                    <>
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <UserCheck className="h-4 w-4 text-green-600" />
+                        Already registered, please select
+                      </div>
+                      <div className="space-y-2">
+                        {customerMatches.slice(0, 4).map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="w-full rounded-lg border bg-white px-3 py-2 text-left transition-colors hover:border-secondary hover:bg-secondary/5"
+                            onClick={() => handleSelectCustomer(item)}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-semibold truncate">{item.name}</p>
+                                <p className="text-xs text-muted-foreground">{item.mobile}</p>
+                              </div>
+                              <Badge variant="outline">Select</Badge>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
+                        <UserPlus className="h-4 w-4" />
+                        No match found. Add as new customer.
+                      </div>
+                      <Button variant="outline" className="w-full" onClick={handleAddAsNewCustomer}>
+                        Add as New Customer
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

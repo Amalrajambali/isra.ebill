@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,7 @@ export default function AddProducts() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   useEffect(() => {
     setProducts(loadProducts());
@@ -54,11 +55,11 @@ export default function AddProducts() {
     () =>
       products.filter(
         (p) =>
-          p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.id.includes(searchTerm),
-      ),
-    [products, searchTerm],
+          p.name.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
+          p.category.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
+          p.id.includes(deferredSearchTerm),
+    ),
+    [products, deferredSearchTerm],
   );
 
   const openAddDialog = () => {

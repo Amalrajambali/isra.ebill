@@ -8,7 +8,7 @@ import { Download, MessageSquare, ArrowLeft, FileText } from 'lucide-react';
 import { InvoicePDF } from '@/components/invoice/InvoicePDF';
 import type { Invoice } from '@/lib/types';
 import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
-import { getInvoiceByNumber } from '@/lib/invoice-store';
+import { getInvoice } from '@/lib/invoice-api';
 import { useToast } from '@/hooks/use-toast';
 
 export default function InvoicePage() {
@@ -21,10 +21,14 @@ export default function InvoicePage() {
   const downloadTriggeredRef = useRef(false);
 
   useEffect(() => {
-    const invoiceNumber = decodeURIComponent(params.invoiceNo);
-    const stored = getInvoiceByNumber(invoiceNumber);
-    setInvoice(stored ?? null);
-    setIsLoaded(true);
+    const loadInvoice = async () => {
+      const invoiceNumber = decodeURIComponent(params.invoiceNo);
+      const stored = await getInvoice(invoiceNumber);
+      setInvoice(stored ?? null);
+      setIsLoaded(true);
+    };
+
+    loadInvoice();
   }, [params.invoiceNo]);
 
   const generatePDFFile = async (): Promise<File | null> => {
@@ -105,7 +109,7 @@ export default function InvoicePage() {
             </Button>
             <div>
               <h1 className="text-3xl font-headline font-bold">Invoice not found</h1>
-              <p className="text-muted-foreground">This invoice is not available in the current browser storage.</p>
+              <p className="text-muted-foreground">This invoice is not available on the server yet.</p>
             </div>
           </div>
         </div>

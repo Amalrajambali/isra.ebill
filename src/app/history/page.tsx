@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,31 +11,36 @@ import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
-import { buildInvoiceUrl, deleteInvoice, loadInvoices } from '@/lib/invoice-store';
+import { buildPublicInvoiceUrl, deleteInvoice, listInvoices } from '@/lib/invoice-api';
 import type { Invoice } from '@/lib/types';
 
 export default function InvoiceHistory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const { toast } = useToast();
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   useEffect(() => {
-    setInvoices(loadInvoices());
+    const fetchInvoices = async () => {
+      setInvoices(await listInvoices());
+    };
+
+    fetchInvoices();
   }, []);
 
   useEffect(() => {
-    const onStorage = () => setInvoices(loadInvoices());
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    const onStorage = async () => setInvoices(await listInvoices());
+    window.addEventListener('focus', onStorage);
+    return () => window.removeEventListener('focus', onStorage);
   }, []);
 
   const filtered = useMemo(() => invoices.filter(inv => 
-    inv.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())
-  ), [invoices, searchTerm]);
+    inv.customerName.toLowerCase().includes(deferredSearchTerm.toLowerCase()) || 
+    inv.invoiceNumber.toLowerCase().includes(deferredSearchTerm.toLowerCase())
+  ), [invoices, deferredSearchTerm]);
 
   const openPdf = (invoice: Invoice, download = false) => {
-    const url = `${buildInvoiceUrl(window.location.origin, invoice.invoiceNumber)}${download ? '?download=1' : ''}`;
+    const url = `${buildPublicInvoiceUrl(window.location.origin, invoice.invoiceNumber)}${download ? '?download=1' : ''}`;
     window.open(url, '_blank', 'noreferrer');
   };
 
@@ -44,10 +49,10 @@ export default function InvoiceHistory() {
     window.open(buildWhatsAppUrl(invoice.customerMobile, message), '_blank', 'noreferrer');
   };
 
-  const removeInvoice = (invoice: Invoice) => {
+  const removeInvoice = async (invoice: Invoice) => {
     if (!window.confirm(`Delete invoice ${invoice.invoiceNumber}?`)) return;
 
-    const next = deleteInvoice(invoice.invoiceNumber);
+    const next = await deleteInvoice(invoice.invoiceNumber);
     setInvoices(next);
     toast({
       title: 'Invoice deleted',

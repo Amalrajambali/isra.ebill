@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
   { label: 'New Invoice', icon: ShoppingCart, href: '/billing' },
-  { label: 'Inventory', icon: Package, href: '/inventory' },
+  { label: 'Add Product', icon: Package, href: '/inventory' },
   { label: 'Customers', icon: '/customers', href: '/customers', lucide: Users },
   { label: 'History', icon: History, href: '/history' },
   { label: 'Settings', icon: Settings, href: '/settings' },
