@@ -21,7 +21,6 @@ export const uploadInvoicePdf = async (file: File, invoiceNumber: string) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', uploadPreset);
-  formData.append('folder', 'invoices');
   formData.append('public_id', invoiceNumber);
 
   const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`, {
@@ -30,7 +29,16 @@ export const uploadInvoicePdf = async (file: File, invoiceNumber: string) => {
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    let errorMessage = await response.text();
+
+    try {
+      const parsed = JSON.parse(errorMessage) as { error?: { message?: string } };
+      errorMessage = parsed.error?.message || errorMessage;
+    } catch {
+      // Keep the raw text response when it is not JSON.
+    }
+
+    throw new Error(errorMessage);
   }
 
   const data = (await response.json()) as CloudinaryUploadResponse;

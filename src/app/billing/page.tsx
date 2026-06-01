@@ -148,10 +148,11 @@ export default function NewInvoice() {
       setSuccessInvoice(failedInvoice);
       setPdfUploadStatus('failed');
       await upsertInvoice(failedInvoice);
+      const message = err instanceof Error ? err.message : 'The invoice PDF could not be uploaded.';
       toast({
         variant: 'destructive',
         title: 'PDF Upload Failed',
-        description: 'The invoice PDF could not be uploaded. You can retry sharing it.',
+        description: message,
       });
       return null;
     } finally {
