@@ -75,7 +75,7 @@ export default function SettingsPage() {
                   id="thankyou"
                   rows={4}
                   defaultValue={
-                    'Dear Customer,\n\nThank you for shopping with ISRA Ethnics.\n\nInvoice No: ISRA-2589\nAmount: ₹4,500\n\n📄 View / Download Invoice:\nhttps://res.cloudinary.com/your-cloud-name/raw/upload/invoices/ISRA-2589.pdf\n\nInstagram: @isra.ethnic'
+                    'Dear Customer,\n\nThank you for shopping with ISRA Ethnics.\n\nInvoice No: ISRA-2589\nAmount: ₹4,500\n\n📄 View / Download Invoice:\nhttps://firebasestorage.googleapis.com/v0/b/your-project.appspot.com/o/invoices%2FISRA-2589.pdf?alt=media&token=your-download-token\n\nInstagram: @isra.ethnic'
                   }
                 />
               </div>

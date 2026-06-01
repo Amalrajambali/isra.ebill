@@ -17,7 +17,7 @@ import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
 import { listInvoices, upsertInvoice } from '@/lib/invoice-api';
 import { loadProducts } from '@/lib/product-store';
 import { addCustomer, findCustomerByMobile, loadCustomers, upsertCustomer } from '@/lib/customer-store';
-import { uploadInvoicePdf } from '@/lib/cloudinary';
+import { uploadInvoicePdf } from '@/lib/invoice-upload';
 
 export default function NewInvoice() {
   const { toast } = useToast();
