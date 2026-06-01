@@ -15,35 +15,54 @@ const getStorage = () => {
   }
 };
 
-const seedCustomers = (storage: Storage) => {
-  storage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_CUSTOMERS));
-  return INITIAL_CUSTOMERS;
-};
+const normalizeMobile = (mobile: string) => mobile.replace(/\D/g, '');
 
-export const loadCustomers = (): Customer[] => {
+const readLocalCustomers = (): Customer[] => {
   const storage = getStorage();
   if (!storage) return INITIAL_CUSTOMERS;
 
   const raw = storage.getItem(STORAGE_KEY);
-  if (!raw) return seedCustomers(storage);
+  if (!raw) return INITIAL_CUSTOMERS;
 
   try {
     const parsed = JSON.parse(raw) as Customer[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return seedCustomers(storage);
-    return parsed;
+    return Array.isArray(parsed) ? parsed : INITIAL_CUSTOMERS;
   } catch {
-    return seedCustomers(storage);
+    return INITIAL_CUSTOMERS;
   }
 };
 
-export const saveCustomers = (customers: Customer[]) => {
+const writeLocalCustomers = (customers: Customer[]) => {
   const storage = getStorage();
-  if (!storage) return customers;
+  if (!storage) return;
   storage.setItem(STORAGE_KEY, JSON.stringify(customers));
-  return customers;
 };
 
-const normalizeMobile = (mobile: string) => mobile.replace(/\D/g, '');
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  return response.json() as Promise<T>;
+}
+
+const seedRemoteCustomers = async (customers: Customer[]) => {
+  await fetchJson('/api/customers', {
+    method: 'POST',
+    body: JSON.stringify({ customers }),
+  });
+  writeLocalCustomers(customers);
+  return customers;
+};
 
 const nextCustomerId = (customers: Customer[]) => {
   const maxId = customers.reduce((max, current) => {
@@ -54,15 +73,46 @@ const nextCustomerId = (customers: Customer[]) => {
   return `c${maxId + 1}`;
 };
 
-export const findCustomerByMobile = (mobile: string) => {
+export const loadCustomers = async (): Promise<Customer[]> => {
+  try {
+    const remote = await fetchJson<Customer[]>('/api/customers');
+    if (remote.length > 0) {
+      writeLocalCustomers(remote);
+      return remote;
+    }
+
+    const local = readLocalCustomers();
+    return seedRemoteCustomers(local.length > 0 ? local : INITIAL_CUSTOMERS);
+  } catch {
+    const local = readLocalCustomers();
+    return local.length > 0 ? local : INITIAL_CUSTOMERS;
+  }
+};
+
+export const saveCustomers = async (customers: Customer[]) => {
+  try {
+    const saved = await fetchJson<Customer[]>('/api/customers', {
+      method: 'POST',
+      body: JSON.stringify({ customers }),
+    });
+    writeLocalCustomers(saved);
+    return saved;
+  } catch {
+    writeLocalCustomers(customers);
+    return customers;
+  }
+};
+
+export const findCustomerByMobile = async (mobile: string) => {
   const normalized = normalizeMobile(mobile);
   if (!normalized) return undefined;
 
-  return loadCustomers().find((customer) => normalizeMobile(customer.mobile) === normalized);
+  const customers = await loadCustomers();
+  return customers.find((customer) => normalizeMobile(customer.mobile) === normalized);
 };
 
-export const upsertCustomer = (customer: Omit<Customer, 'id' | 'totalOrders'> & Partial<Pick<Customer, 'id' | 'totalOrders' | 'lastPurchaseDate'>>) => {
-  const customers = loadCustomers();
+export const upsertCustomer = async (customer: Omit<Customer, 'id' | 'totalOrders'> & Partial<Pick<Customer, 'id' | 'totalOrders' | 'lastPurchaseDate'>>) => {
+  const customers = await loadCustomers();
   const normalizedMobile = normalizeMobile(customer.mobile);
   const existingIndex = customers.findIndex(
     (item) => normalizeMobile(item.mobile) === normalizedMobile || (customer.id ? item.id === customer.id : false),
@@ -81,8 +131,8 @@ export const upsertCustomer = (customer: Omit<Customer, 'id' | 'totalOrders'> & 
           }
         : item,
     );
-    saveCustomers(next);
-    return next[existingIndex];
+    const saved = await saveCustomers(next);
+    return saved[existingIndex];
   }
 
   const newCustomer: Customer = {
@@ -95,16 +145,15 @@ export const upsertCustomer = (customer: Omit<Customer, 'id' | 'totalOrders'> & 
     lastPurchaseDate: customer.lastPurchaseDate,
   };
 
-  const next = [...customers, newCustomer];
-  saveCustomers(next);
-  return newCustomer;
+  const saved = await saveCustomers([...customers, newCustomer]);
+  return saved[saved.length - 1];
 };
 
-export const addCustomer = (customer: Omit<Customer, 'id' | 'totalOrders'>) => upsertCustomer(customer);
+export const addCustomer = async (customer: Omit<Customer, 'id' | 'totalOrders'>) => upsertCustomer(customer);
 
-export const updateCustomer = (customer: Customer) => {
-  const next = loadCustomers().map((item) => (item.id === customer.id ? customer : item));
-  saveCustomers(next);
+export const updateCustomer = async (customer: Customer) => {
+  const customers = await loadCustomers();
+  const next = await saveCustomers(customers.map((item) => (item.id === customer.id ? customer : item)));
   return next;
 };
 

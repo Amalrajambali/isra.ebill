@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { PwaRegister } from '@/components/pwa-register';
+import { AuthProvider } from '@/components/auth-provider';
 
 export const metadata: Metadata = {
   title: 'ISRA EthniConnect | Boutique Billing',
@@ -43,9 +44,11 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon.svg" />
       </head>
       <body className="font-body antialiased bg-background">
-        <PwaRegister />
-        {children}
-        <Toaster />
+        <AuthProvider>
+          <PwaRegister />
+          {children}
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

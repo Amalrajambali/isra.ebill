@@ -1,21 +1,44 @@
 
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Users, Package, IndianRupee, AlertCircle, ShoppingBag } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
-import { INITIAL_PRODUCTS, INITIAL_INVOICES, INITIAL_CUSTOMERS } from '@/lib/mock-data';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { loadProducts } from '@/lib/product-store';
+import { loadCustomers } from '@/lib/customer-store';
+import { listInvoices } from '@/lib/invoice-api';
+import type { Product, Customer, Invoice } from '@/lib/types';
 
 export default function Dashboard() {
-  const totalSales = INITIAL_INVOICES.reduce((acc, inv) => acc + inv.grandTotal, 0);
-  const totalProducts = INITIAL_PRODUCTS.length;
-  const totalCustomers = INITIAL_CUSTOMERS.length;
-  const lowStockCount = INITIAL_PRODUCTS.filter(p => p.stockQuantity < 5).length;
+  const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      const [nextProducts, nextCustomers, nextInvoices] = await Promise.all([
+        loadProducts(),
+        loadCustomers(),
+        listInvoices(),
+      ]);
+
+      setProducts(nextProducts);
+      setCustomers(nextCustomers);
+      setInvoices(nextInvoices);
+    };
+
+    fetchDashboard();
+  }, []);
+
+  const totalSales = invoices.reduce((acc, inv) => acc + inv.grandTotal, 0);
+  const totalProducts = products.length;
+  const totalCustomers = customers.length;
+  const lowStockCount = products.filter((p) => p.stockQuantity < 5).length;
 
   return (
     <Shell>
@@ -63,7 +86,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-primary">{totalProducts}</div>
-              <p className="text-xs text-muted-foreground mt-1">{INITIAL_PRODUCTS.reduce((a, b) => a + b.stockQuantity, 0)} units in stock</p>
+              <p className="text-xs text-muted-foreground mt-1">{products.reduce((total: number, product: Product) => total + product.stockQuantity, 0)} units in stock</p>
             </CardContent>
           </Card>
           <Card className="border-none shadow-md bg-white">
@@ -85,7 +108,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {INITIAL_INVOICES.map((inv) => (
+                {invoices.map((inv) => (
                   <div key={inv.id} className="flex items-center justify-between p-3 border-b last:border-0">
                     <div>
                       <p className="font-bold text-primary">{inv.customerName}</p>
@@ -110,7 +133,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {INITIAL_PRODUCTS.filter(p => p.stockQuantity < 10).map((p) => (
+                {products.filter(p => p.stockQuantity < 10).map((p) => (
                   <div key={p.id} className="flex items-center justify-between p-3 border-b last:border-0">
                     <div>
                       <p className="font-bold text-primary">{p.name}</p>

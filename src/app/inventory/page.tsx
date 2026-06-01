@@ -42,13 +42,15 @@ export default function AddProducts() {
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
   useEffect(() => {
-    setProducts(loadProducts());
-  }, []);
+    const fetchProducts = async () => setProducts(await loadProducts());
+    fetchProducts();
 
-  useEffect(() => {
-    const onStorage = () => setProducts(loadProducts());
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    const onFocus = () => {
+      fetchProducts();
+    };
+
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   const filteredProducts = useMemo(
@@ -78,7 +80,7 @@ export default function AddProducts() {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!draft.name.trim()) {
       toast({
         variant: 'destructive',
@@ -96,8 +98,8 @@ export default function AddProducts() {
     };
 
     const nextProducts = draft.id
-      ? updateProduct({ ...nextProduct, id: draft.id })
-      : addProduct(nextProduct);
+      ? await updateProduct({ ...nextProduct, id: draft.id })
+      : await addProduct(nextProduct);
 
     setProducts(nextProducts);
     setDialogOpen(false);
@@ -108,10 +110,10 @@ export default function AddProducts() {
     });
   };
 
-  const handleDelete = (product: Product) => {
+  const handleDelete = async (product: Product) => {
     if (!window.confirm(`Delete ${product.name}?`)) return;
 
-    const nextProducts = deleteProduct(product.id);
+    const nextProducts = await deleteProduct(product.id);
     setProducts(nextProducts);
     toast({
       title: 'Product deleted',

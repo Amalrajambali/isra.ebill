@@ -16,15 +16,15 @@ import { InvoicePDF } from '@/components/invoice/InvoicePDF';
 import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
 import { listInvoices, upsertInvoice } from '@/lib/invoice-api';
 import { loadProducts } from '@/lib/product-store';
-import { addCustomer, findCustomerByMobile, loadCustomers, upsertCustomer } from '@/lib/customer-store';
+import { addCustomer, loadCustomers, upsertCustomer } from '@/lib/customer-store';
 import { uploadInvoicePdf } from '@/lib/invoice-upload';
 
 export default function NewInvoice() {
   const { toast } = useToast();
   const [customer, setCustomer] = useState<Partial<Customer>>({ name: '', mobile: '', address: '' });
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
-  const [customers, setCustomers] = useState<Customer[]>(() => loadCustomers());
-  const [products, setProducts] = useState<Product[]>(() => loadProducts());
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -50,7 +50,9 @@ export default function NewInvoice() {
   }, [customers, deferredCustomerMobile, deferredCustomerName, normalizedCustomerMobile]);
 
   const exactCustomerMatch = useMemo(() => {
-    const exactMobile = normalizedCustomerMobile ? findCustomerByMobile(normalizedCustomerMobile) : undefined;
+    const exactMobile = normalizedCustomerMobile
+      ? customers.find((item) => item.mobile.replace(/\D/g, '') === normalizedCustomerMobile)
+      : undefined;
     if (exactMobile) return exactMobile;
 
     const nameQuery = deferredCustomerName.trim().toLowerCase();
@@ -60,20 +62,18 @@ export default function NewInvoice() {
   }, [customers, deferredCustomerName, normalizedCustomerMobile]);
 
   useEffect(() => {
-    setProducts(loadProducts());
-    setCustomers(loadCustomers());
-    const onStorage = () => {
-      setProducts(loadProducts());
-      setCustomers(loadCustomers());
+    const fetchData = async () => {
+      const [nextProducts, nextCustomers] = await Promise.all([loadProducts(), loadCustomers()]);
+      setProducts(nextProducts);
+      setCustomers(nextCustomers);
     };
-    window.addEventListener('storage', onStorage);
+
+    fetchData();
     const onFocus = () => {
-      setProducts(loadProducts());
-      setCustomers(loadCustomers());
+      fetchData();
     };
     window.addEventListener('focus', onFocus);
     return () => {
-      window.removeEventListener('storage', onStorage);
       window.removeEventListener('focus', onFocus);
     };
   }, []);
@@ -218,9 +218,9 @@ export default function NewInvoice() {
     const matchedCustomer =
       exactCustomerMatch ??
       customers.find((item) => item.name.trim().toLowerCase() === (customer.name ?? '').trim().toLowerCase()) ??
-      findCustomerByMobile(customer.mobile || '');
+      customers.find((item) => item.mobile.replace(/\D/g, '') === (customer.mobile || '').replace(/\D/g, ''));
 
-    const savedCustomer = upsertCustomer({
+    const savedCustomer = await upsertCustomer({
       id: matchedCustomer?.id,
       name: customer.name!.trim(),
       mobile: customer.mobile!.trim(),
@@ -230,7 +230,7 @@ export default function NewInvoice() {
       lastPurchaseDate: today,
     });
 
-    setCustomers(loadCustomers());
+    setCustomers(await loadCustomers());
     setCustomer(savedCustomer);
     setIsExistingCustomer(true);
     loadSuggestions(savedCustomer);
@@ -265,7 +265,7 @@ export default function NewInvoice() {
     });
   };
 
-  const handleAddAsNewCustomer = () => {
+  const handleAddAsNewCustomer = async () => {
     if (!customer.name?.trim() || !customer.mobile?.trim()) {
       toast({
         variant: 'destructive',
@@ -275,14 +275,14 @@ export default function NewInvoice() {
       return;
     }
 
-    const saved = addCustomer({
+    const saved = await addCustomer({
       name: customer.name.trim(),
       mobile: customer.mobile.trim(),
       address: customer.address?.trim() || '',
       notes: '',
     });
 
-    setCustomers(loadCustomers());
+    setCustomers(await loadCustomers());
     setCustomer(saved);
     setIsExistingCustomer(true);
     loadSuggestions(saved);

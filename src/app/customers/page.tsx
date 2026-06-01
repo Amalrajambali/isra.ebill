@@ -34,16 +34,13 @@ export default function Customers() {
   const [draft, setDraft] = useState<CustomerDraft>(emptyDraft);
 
   useEffect(() => {
-    setCustomers(loadCustomers());
-  }, []);
+    const fetchCustomers = async () => setCustomers(await loadCustomers());
+    fetchCustomers();
 
-  useEffect(() => {
-    const onStorage = () => setCustomers(loadCustomers());
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('focus', onStorage);
+    const onFocus = () => fetchCustomers();
+    window.addEventListener('focus', onFocus);
     return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('focus', onStorage);
+      window.removeEventListener('focus', onFocus);
     };
   }, []);
 
@@ -61,7 +58,7 @@ export default function Customers() {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!draft.name.trim() || !draft.mobile.trim()) {
       toast({
         variant: 'destructive',
@@ -71,14 +68,14 @@ export default function Customers() {
       return;
     }
 
-    const next = addCustomer({
+    const next = await addCustomer({
       name: draft.name.trim(),
       mobile: draft.mobile.trim(),
       address: draft.address.trim(),
       notes: '',
     });
 
-    setCustomers(loadCustomers());
+    setCustomers(await loadCustomers());
     setDialogOpen(false);
     setDraft(emptyDraft);
     toast({

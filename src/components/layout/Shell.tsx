@@ -1,13 +1,14 @@
 
 "use client";
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, ShoppingCart, Package, Users, History, Settings, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/components/auth-provider';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
@@ -20,7 +21,23 @@ const navItems = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const { user, loading, logout } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user && pathname !== '/login') {
+      router.replace('/login');
+    }
+  }, [loading, pathname, router, user]);
+
+  if (loading || (!user && pathname !== '/login')) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-background">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -66,7 +83,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
           
-          <nav className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
             {navItems.map((item) => {
               const Icon = item.lucide || item.icon;
               return (
@@ -84,7 +101,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 </Link>
               )
             })}
-          </nav>
+            <Button variant="outline" onClick={logout}>Logout</Button>
+          </div>
         </div>
       </header>
 
@@ -108,9 +126,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
             )}>
               {typeof Icon !== 'string' && <Icon className={cn("h-6 w-6", isActive && "scale-110")} />}
               <span className="text-[10px] mt-1 font-medium">{item.label}</span>
-            </Link>
-          )
+          </Link>
+        )
         })}
+        <button
+          className="flex min-w-[76px] flex-col items-center rounded-lg px-2 py-2 text-muted-foreground"
+          onClick={() => logout()}
+        >
+          <span className="text-[10px] font-medium">Logout</span>
+        </button>
         </nav>
       </div>
     </div>
