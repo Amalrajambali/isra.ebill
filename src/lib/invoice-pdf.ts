@@ -23,12 +23,12 @@ function drawHeader(pdf: jsPDF, invoice: Invoice) {
 
   pdf.setFont('times', 'bold');
   pdf.setFontSize(20);
-  pdf.text('ISRA ETHNICS', left, top);
+  pdf.text('ISRA ETHNIC', left, top);
 
   pdf.setFont('times', 'normal');
   pdf.setFontSize(8.5);
   pdf.setCharSpace(0.8);
-  pdf.text('BOUTIQUE & FASHION STUDIO', left, top + 5.5);
+  pdf.text('CHURIDARS & SAREES', left, top + 5.5);
   pdf.setCharSpace(0);
 
   pdf.setFont('helvetica', 'normal');
@@ -194,7 +194,7 @@ function drawFooter(pdf: jsPDF) {
   pdf.setTextColor(...COLORS.ink);
   pdf.setFont('times', 'italic');
   pdf.setFontSize(11);
-  pdf.text('"Thank you for shopping with ISRA Ethnics. Happy Shopping!"', width / 2, y, {
+  pdf.text('"Thank you for shopping with ISRA Churidars & Sarees. Happy Shopping!"', width / 2, y, {
     align: 'center',
   });
 
