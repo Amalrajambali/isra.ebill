@@ -43,19 +43,3 @@ export const buildWhatsAppUrl = (customerMobile: string, message: string) => {
   const mobile = normalizeWhatsAppNumber(customerMobile);
   return `https://wa.me/${mobile}?text=${encodeURIComponent(message)}`;
 };
-
-export const downloadInvoicePdf = (invoice: Invoice) => {
-  const pdfUrl =
-    invoice.pdfUrl ||
-    (typeof window !== 'undefined' ? buildInvoicePdfUrl(invoice.invoiceNumber, window.location.origin) : '');
-
-  if (!pdfUrl || typeof window === 'undefined') return;
-
-  const link = document.createElement('a');
-  link.href = pdfUrl;
-  link.download = `${invoice.invoiceNumber}.pdf`;
-  link.rel = 'noreferrer';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-};
