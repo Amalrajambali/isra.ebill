@@ -53,28 +53,13 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-const seedRemoteProducts = async (products: Product[]) => {
-  await fetchJson('/api/products', {
-    method: 'POST',
-    body: JSON.stringify({ products }),
-  });
-  writeLocalProducts(products);
-  return products;
-};
-
 export const loadProducts = async (): Promise<Product[]> => {
   try {
     const remote = await fetchJson<Product[]>('/api/products');
-    if (remote.length > 0) {
-      writeLocalProducts(remote);
-      return remote;
-    }
-
-    const local = readLocalProducts();
-    return seedRemoteProducts(local);
+    writeLocalProducts(remote);
+    return remote;
   } catch {
-    const local = readLocalProducts();
-    return local;
+    return [];
   }
 };
 

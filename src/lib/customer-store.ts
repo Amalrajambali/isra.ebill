@@ -55,15 +55,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-const seedRemoteCustomers = async (customers: Customer[]) => {
-  await fetchJson('/api/customers', {
-    method: 'POST',
-    body: JSON.stringify({ customers }),
-  });
-  writeLocalCustomers(customers);
-  return customers;
-};
-
 const nextCustomerId = (customers: Customer[]) => {
   const maxId = customers.reduce((max, current) => {
     const numeric = Number(current.id.replace(/\D/g, ''));
@@ -76,16 +67,10 @@ const nextCustomerId = (customers: Customer[]) => {
 export const loadCustomers = async (): Promise<Customer[]> => {
   try {
     const remote = await fetchJson<Customer[]>('/api/customers');
-    if (remote.length > 0) {
-      writeLocalCustomers(remote);
-      return remote;
-    }
-
-    const local = readLocalCustomers();
-    return seedRemoteCustomers(local);
+    writeLocalCustomers(remote);
+    return remote;
   } catch {
-    const local = readLocalCustomers();
-    return local;
+    return [];
   }
 };
 

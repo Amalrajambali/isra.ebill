@@ -56,7 +56,7 @@ export async function listInvoices(): Promise<Invoice[]> {
   try {
     return await fetchJson<Invoice[]>('/api/invoices');
   } catch {
-    return readLocalInvoices();
+    return [];
   }
 }
 
@@ -65,7 +65,7 @@ export async function getInvoice(invoiceNumber: string): Promise<Invoice | null>
     const data = await fetchJson<{ invoice: Invoice }>(`/api/invoices/${encodeURIComponent(invoiceNumber)}`);
     return data.invoice;
   } catch {
-    return readLocalInvoices().find((invoice) => invoice.invoiceNumber === invoiceNumber) ?? null;
+    return null;
   }
 }
 
