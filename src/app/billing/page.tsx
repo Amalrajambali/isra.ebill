@@ -13,7 +13,7 @@ import { InvoiceItem, Customer, Product, Invoice } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { InvoicePDF } from '@/components/invoice/InvoicePDF';
-import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
+import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl, downloadInvoicePdf } from '@/lib/invoice-share';
 import { listInvoices, upsertInvoice } from '@/lib/invoice-api';
 import { loadProducts } from '@/lib/product-store';
 import { addCustomer, loadCustomers, upsertCustomer } from '@/lib/customer-store';
@@ -85,34 +85,6 @@ export default function NewInvoice() {
     } while (existingNumbers.has(candidate));
 
     return candidate;
-  };
-
-  const generatePDFFile = async (invoice: Invoice): Promise<File | null> => {
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const jsPDF = (await import('jspdf')).default;
-
-      const docElement = document.getElementById('invoice-document');
-      if (!docElement) return null;
-
-      const canvas = await html2canvas(docElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.92);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      const pdfBlob = pdf.output('blob');
-      return new File([pdfBlob], `${invoice.invoiceNumber}.pdf`, { type: 'application/pdf' });
-    } catch (err) {
-      console.error('PDF generation error:', err);
-      return null;
-    }
   };
 
   const loadSuggestions = async (cust: Customer) => {
@@ -249,24 +221,16 @@ export default function NewInvoice() {
 
   const downloadPDF = async () => {
     if (!successInvoice) return;
-
-    const file = await generatePDFFile(successInvoice);
-
-    if (!file) {
+    if (!successInvoice.pdfUrl) {
       toast({
         variant: 'destructive',
         title: 'PDF Not Ready',
-        description: 'Please wait until the invoice PDF finishes generating.',
+        description: 'The public PDF link is not ready yet.',
       });
       return;
     }
 
-    const url = URL.createObjectURL(file);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadInvoicePdf(successInvoice);
   };
 
   const handleShare = async () => {
