@@ -6,16 +6,6 @@ import type { Invoice } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-function parseInvoice(payload: string | null): Invoice | null {
-  if (!payload) return null;
-
-  try {
-    return JSON.parse(decodeURIComponent(payload)) as Invoice;
-  } catch {
-    return null;
-  }
-}
-
 async function getInvoiceByNumber(invoiceNumber: string) {
   if (!isFirestoreConfigured()) {
     return INITIAL_INVOICES.find((invoice) => invoice.invoiceNumber === invoiceNumber) ?? null;
@@ -33,26 +23,21 @@ async function getInvoiceByNumber(invoiceNumber: string) {
   return INITIAL_INVOICES.find((invoice) => invoice.invoiceNumber === invoiceNumber) ?? null;
 }
 
-export async function GET(request: NextRequest) {
-  const legacyInvoice = parseInvoice(request.nextUrl.searchParams.get('payload'));
-  const invoiceNumber = request.nextUrl.searchParams.get('invoiceNumber');
-  const pathInvoiceNumber = request.nextUrl.pathname.split('/').pop();
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ invoiceNo: string }> }) {
+  const { invoiceNo } = await params;
+  const invoiceNumber = decodeURIComponent(invoiceNo);
+  const invoice = await getInvoiceByNumber(invoiceNumber);
 
-  const resolvedInvoice =
-    legacyInvoice ||
-    (invoiceNumber ? await getInvoiceByNumber(invoiceNumber) : null) ||
-    (pathInvoiceNumber && pathInvoiceNumber !== 'pdf' ? await getInvoiceByNumber(decodeURIComponent(pathInvoiceNumber)) : null);
-
-  if (!resolvedInvoice) {
+  if (!invoice) {
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
   }
 
-  const pdfBytes = createInvoicePdfBuffer(resolvedInvoice);
+  const pdfBytes = createInvoicePdfBuffer(invoice);
 
   return new NextResponse(pdfBytes, {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="${resolvedInvoice.invoiceNumber}.pdf"`,
+      'Content-Disposition': `inline; filename="${invoice.invoiceNumber}.pdf"`,
       'Cache-Control': 'no-store',
     },
   });

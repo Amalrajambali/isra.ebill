@@ -13,11 +13,10 @@ import { InvoiceItem, Customer, Product, Invoice } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { InvoicePDF } from '@/components/invoice/InvoicePDF';
-import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
+import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
 import { listInvoices, upsertInvoice } from '@/lib/invoice-api';
 import { loadProducts } from '@/lib/product-store';
 import { addCustomer, loadCustomers, upsertCustomer } from '@/lib/customer-store';
-import { uploadInvoicePdf } from '@/lib/invoice-upload';
 
 export default function NewInvoice() {
   const { toast } = useToast();
@@ -30,8 +29,7 @@ export default function NewInvoice() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [successInvoice, setSuccessInvoice] = useState<Invoice | null>(null);
-  const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'failed'>('idle');
-  const [isPreparingPdf, setIsPreparingPdf] = useState(false);
+  const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'uploaded'>('idle');
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const deferredCustomerName = useDeferredValue(customer.name ?? '');
   const deferredCustomerMobile = useDeferredValue(customer.mobile ?? '');
@@ -117,49 +115,6 @@ export default function NewInvoice() {
     }
   };
 
-  const prepareAndUploadPdf = async (invoice: Invoice) => {
-    setIsPreparingPdf(true);
-    setPdfUploadStatus('uploading');
-
-    try {
-      const file = await generatePDFFile(invoice);
-      if (!file) {
-        throw new Error('PDF generation failed');
-      }
-
-      const upload = await uploadInvoicePdf(file, invoice.invoiceNumber);
-      const updatedInvoice: Invoice = {
-        ...invoice,
-        pdfUrl: upload.pdfUrl,
-        pdfPublicId: upload.pdfPublicId,
-        pdfUploadStatus: 'uploaded',
-      };
-
-      setSuccessInvoice(updatedInvoice);
-      setPdfUploadStatus('uploaded');
-      await upsertInvoice(updatedInvoice);
-      return updatedInvoice;
-    } catch (err) {
-      console.error('PDF upload error:', err);
-      const failedInvoice: Invoice = {
-        ...invoice,
-        pdfUploadStatus: 'failed',
-      };
-      setSuccessInvoice(failedInvoice);
-      setPdfUploadStatus('failed');
-      await upsertInvoice(failedInvoice);
-      const message = err instanceof Error ? err.message : 'The invoice PDF could not be uploaded.';
-      toast({
-        variant: 'destructive',
-        title: 'PDF Upload Failed',
-        description: message,
-      });
-      return null;
-    } finally {
-      setIsPreparingPdf(false);
-    }
-  };
-
   const loadSuggestions = async (cust: Customer) => {
     try {
       const suggestions = await customerPurchaseSuggestions({
@@ -211,9 +166,8 @@ export default function NewInvoice() {
     }
 
     setIsGenerating(true);
-    setPdfUploadStatus('uploading');
-    setIsPreparingPdf(true);
     const invoiceNumber = await generateUniqueInvoiceNumber();
+    const pdfUrl = buildInvoicePdfUrl(invoiceNumber, window.location.origin);
     const today = new Date().toISOString().split('T')[0];
     const matchedCustomer =
       exactCustomerMatch ??
@@ -246,12 +200,13 @@ export default function NewInvoice() {
       subtotal,
       totalDiscount,
       grandTotal,
-      pdfUploadStatus: 'pending',
+      pdfUrl,
+      pdfUploadStatus: 'uploaded',
     };
 
     await upsertInvoice(invoice);
     setSuccessInvoice(invoice);
-    await prepareAndUploadPdf(invoice);
+    setPdfUploadStatus('uploaded');
     setIsGenerating(false);
   };
 
@@ -314,11 +269,6 @@ export default function NewInvoice() {
     URL.revokeObjectURL(url);
   };
 
-  const retryUpload = async () => {
-    if (!successInvoice) return;
-    await prepareAndUploadPdf(successInvoice);
-  };
-
   const handleShare = async () => {
     if (!successInvoice) return;
 
@@ -326,7 +276,7 @@ export default function NewInvoice() {
       toast({
         variant: 'destructive',
         title: 'PDF Not Ready',
-        description: 'WhatsApp sharing is disabled until the public PDF upload succeeds.',
+        description: 'WhatsApp sharing is disabled until the public PDF link is ready.',
       });
       return;
     }
@@ -368,11 +318,7 @@ export default function NewInvoice() {
             <div className="rounded-xl border bg-white/80 p-4 text-left">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Public PDF</p>
               <p className="mt-1 text-sm">
-                {pdfUploadStatus === 'uploaded' && successInvoice.pdfUrl
-                  ? successInvoice.pdfUrl
-                  : pdfUploadStatus === 'failed'
-                    ? 'Upload failed. You can retry below.'
-                    : 'Generating and uploading public PDF link...'}
+                {successInvoice.pdfUrl || 'Generating public PDF link...'}
               </p>
             </div>
 
@@ -384,15 +330,10 @@ export default function NewInvoice() {
                 onClick={handleShare}
                 size="lg"
                 className="bg-[#25D366] hover:bg-[#25D366]/90 shadow-lg text-white"
-                disabled={pdfUploadStatus !== 'uploaded' || isPreparingPdf || !successInvoice.pdfUrl}
+                disabled={pdfUploadStatus !== 'uploaded' || !successInvoice.pdfUrl}
               >
-                <Share2 className="h-4 w-4 mr-2" /> {isPreparingPdf ? 'Preparing PDF...' : 'Share to WhatsApp'}
+                <Share2 className="h-4 w-4 mr-2" /> Share to WhatsApp
               </Button>
-              {pdfUploadStatus === 'failed' && (
-                <Button variant="outline" size="lg" onClick={retryUpload} disabled={isPreparingPdf}>
-                  Retry Upload
-                </Button>
-              )}
               <Button variant="outline" size="lg" onClick={() => setSuccessInvoice(null)}>Create New Invoice</Button>
             </div>
           </div>

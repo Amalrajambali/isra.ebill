@@ -10,7 +10,7 @@ import { Search, Filter, Eye, Download, MessageSquare, Calendar, Trash2 } from '
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
+import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
 import { deleteInvoice, listInvoices } from '@/lib/invoice-api';
 import type { Invoice } from '@/lib/types';
 
@@ -40,20 +40,24 @@ export default function InvoiceHistory() {
   ), [invoices, deferredSearchTerm]);
 
   const openPdf = (invoice: Invoice) => {
-    if (!invoice.pdfUrl) {
+    const pdfUrl = invoice.pdfUrl || buildInvoicePdfUrl(invoice.invoiceNumber, window.location.origin);
+
+    if (!pdfUrl) {
       toast({
         variant: 'destructive',
         title: 'PDF not available',
-        description: 'This invoice has not finished uploading its public PDF yet.',
+        description: 'This invoice does not have a public PDF link yet.',
       });
       return;
     }
 
-    window.open(invoice.pdfUrl, '_blank', 'noreferrer');
+    window.open(pdfUrl, '_blank', 'noreferrer');
   };
 
   const resendWhatsApp = async (invoice: Invoice) => {
-    if (!invoice.pdfUrl) {
+    const pdfUrl = invoice.pdfUrl || buildInvoicePdfUrl(invoice.invoiceNumber, window.location.origin);
+
+    if (!pdfUrl) {
       toast({
         variant: 'destructive',
         title: 'PDF not available',
@@ -62,7 +66,7 @@ export default function InvoiceHistory() {
       return;
     }
 
-    const message = buildShareMessage(invoice);
+    const message = buildShareMessage({ ...invoice, pdfUrl });
     window.open(buildWhatsAppUrl(invoice.customerMobile, message), '_blank', 'noreferrer');
   };
 

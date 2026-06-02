@@ -16,8 +16,15 @@ export const normalizeWhatsAppNumber = (customerMobile: string) => {
 
 export const formatWhatsAppAmount = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
 
+export const buildInvoicePdfUrl = (invoiceNumber: string, origin?: string) => {
+  const path = `/api/invoices/pdf/${encodeURIComponent(invoiceNumber)}`;
+  return origin ? new URL(path, origin).toString() : path;
+};
+
 export const buildShareMessage = (invoice: Invoice) => {
-  const invoiceUrl = invoice.pdfUrl || '';
+  const invoiceUrl =
+    invoice.pdfUrl ||
+    (typeof window !== 'undefined' ? buildInvoicePdfUrl(invoice.invoiceNumber, window.location.origin) : '');
 
   return [
     'Dear Customer,',
