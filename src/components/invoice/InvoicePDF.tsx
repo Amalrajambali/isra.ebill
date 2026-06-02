@@ -19,7 +19,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, settings }) => 
     >
       <div className="mb-10 flex items-start justify-between gap-8 border-b border-slate-800/80 pb-7">
         <div className="space-y-1">
-          <h1 className="text-4xl font-serif font-bold tracking-tight text-slate-900">ISRA ETHNICS</h1>
+          <h1 className="text-4xl font-serif font-bold tracking-tight text-slate-900">ISRA ETHNIC</h1>
           <p className="text-[11px] font-medium uppercase tracking-[0.35em] text-slate-500">
             Boutique &amp; Fashion Studio
           </p>
@@ -117,7 +117,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, settings }) => 
       <div className="border-t border-slate-100 pt-10">
         <div className="text-center">
           <div className="font-serif italic text-lg text-slate-800">
-            &quot;Thank you for shopping with ISRA Ethnics. Happy Shopping!&quot;
+            &quot;Thank you for shopping with ISRA Churidars & Sarees. Happy Shopping!&quot;
           </div>
           <div className="mt-3 text-[10px] uppercase tracking-[0.28em] text-slate-400">
             Visit us again for the latest Saree &amp; Churidar collections
