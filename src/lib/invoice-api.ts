@@ -1,20 +1,20 @@
-import { INITIAL_INVOICES } from '@/lib/mock-data';
 import type { Invoice } from '@/lib/types';
 
 const LOCAL_STORAGE_KEY = 'isra-ethnics-invoices-v3';
+const EMPTY_INVOICES: Invoice[] = [];
 
 const isBrowser = () => typeof window !== 'undefined';
 
 const readLocalInvoices = (): Invoice[] => {
-  if (!isBrowser()) return INITIAL_INVOICES;
+  if (!isBrowser()) return EMPTY_INVOICES;
 
   try {
     const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return INITIAL_INVOICES;
+    if (!raw) return EMPTY_INVOICES;
     const parsed = JSON.parse(raw) as Invoice[];
-    return Array.isArray(parsed) ? parsed : INITIAL_INVOICES;
+    return Array.isArray(parsed) ? parsed : EMPTY_INVOICES;
   } catch {
-    return INITIAL_INVOICES;
+    return EMPTY_INVOICES;
   }
 };
 

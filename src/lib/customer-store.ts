@@ -1,7 +1,7 @@
-import { INITIAL_CUSTOMERS } from '@/lib/mock-data';
 import type { Customer } from '@/lib/types';
 
 const STORAGE_KEY = 'isra-ethnics-customers-v1';
+const EMPTY_CUSTOMERS: Customer[] = [];
 
 const isBrowser = () => typeof window !== 'undefined';
 
@@ -19,16 +19,16 @@ const normalizeMobile = (mobile: string) => mobile.replace(/\D/g, '');
 
 const readLocalCustomers = (): Customer[] => {
   const storage = getStorage();
-  if (!storage) return INITIAL_CUSTOMERS;
+  if (!storage) return EMPTY_CUSTOMERS;
 
   const raw = storage.getItem(STORAGE_KEY);
-  if (!raw) return INITIAL_CUSTOMERS;
+  if (!raw) return EMPTY_CUSTOMERS;
 
   try {
     const parsed = JSON.parse(raw) as Customer[];
-    return Array.isArray(parsed) ? parsed : INITIAL_CUSTOMERS;
+    return Array.isArray(parsed) ? parsed : EMPTY_CUSTOMERS;
   } catch {
-    return INITIAL_CUSTOMERS;
+    return EMPTY_CUSTOMERS;
   }
 };
 
@@ -82,10 +82,10 @@ export const loadCustomers = async (): Promise<Customer[]> => {
     }
 
     const local = readLocalCustomers();
-    return seedRemoteCustomers(local.length > 0 ? local : INITIAL_CUSTOMERS);
+    return seedRemoteCustomers(local);
   } catch {
     const local = readLocalCustomers();
-    return local.length > 0 ? local : INITIAL_CUSTOMERS;
+    return local;
   }
 };
 
@@ -156,4 +156,3 @@ export const updateCustomer = async (customer: Customer) => {
   const next = await saveCustomers(customers.map((item) => (item.id === customer.id ? customer : item)));
   return next;
 };
-

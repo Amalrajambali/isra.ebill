@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb, isFirestoreConfigured } from '@/lib/firebase-admin';
-import { INITIAL_CUSTOMERS } from '@/lib/mock-data';
 import type { Customer } from '@/lib/types';
 
 const COLLECTION = 'customers';
 
 async function readCustomers() {
-  if (!isFirestoreConfigured()) return INITIAL_CUSTOMERS;
+  if (!isFirestoreConfigured()) return [];
 
   const snapshot = await getAdminDb().collection(COLLECTION).orderBy('name').get();
   const customers = snapshot.docs.map((doc) => doc.data() as Customer);

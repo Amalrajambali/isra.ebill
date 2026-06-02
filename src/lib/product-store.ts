@@ -1,7 +1,7 @@
-import { INITIAL_PRODUCTS } from '@/lib/mock-data';
 import type { Product } from '@/lib/types';
 
 const STORAGE_KEY = 'isra-ethnics-products-v1';
+const EMPTY_PRODUCTS: Product[] = [];
 
 const isBrowser = () => typeof window !== 'undefined';
 
@@ -17,16 +17,16 @@ const getStorage = () => {
 
 const readLocalProducts = (): Product[] => {
   const storage = getStorage();
-  if (!storage) return INITIAL_PRODUCTS;
+  if (!storage) return EMPTY_PRODUCTS;
 
   const raw = storage.getItem(STORAGE_KEY);
-  if (!raw) return INITIAL_PRODUCTS;
+  if (!raw) return EMPTY_PRODUCTS;
 
   try {
     const parsed = JSON.parse(raw) as Product[];
-    return Array.isArray(parsed) ? parsed : INITIAL_PRODUCTS;
+    return Array.isArray(parsed) ? parsed : EMPTY_PRODUCTS;
   } catch {
-    return INITIAL_PRODUCTS;
+    return EMPTY_PRODUCTS;
   }
 };
 
@@ -71,10 +71,10 @@ export const loadProducts = async (): Promise<Product[]> => {
     }
 
     const local = readLocalProducts();
-    return seedRemoteProducts(local.length > 0 ? local : INITIAL_PRODUCTS);
+    return seedRemoteProducts(local);
   } catch {
     const local = readLocalProducts();
-    return local.length > 0 ? local : INITIAL_PRODUCTS;
+    return local;
   }
 };
 
@@ -112,4 +112,3 @@ export const deleteProduct = async (productId: string) => {
   const next = await saveProducts(products.filter((item) => item.id !== productId));
   return next;
 };
-

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { INITIAL_INVOICES } from '@/lib/mock-data';
 import { createInvoicePdfBuffer } from '@/lib/invoice-pdf';
 import { getAdminDb, isFirestoreConfigured } from '@/lib/firebase-admin';
 import type { Invoice } from '@/lib/types';
@@ -7,9 +6,7 @@ import type { Invoice } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 
 async function getInvoiceByNumber(invoiceNumber: string) {
-  if (!isFirestoreConfigured()) {
-    return INITIAL_INVOICES.find((invoice) => invoice.invoiceNumber === invoiceNumber) ?? null;
-  }
+  if (!isFirestoreConfigured()) return null;
 
   try {
     const doc = await getAdminDb().collection('invoices').doc(invoiceNumber).get();
@@ -20,7 +17,7 @@ async function getInvoiceByNumber(invoiceNumber: string) {
     console.error('Failed to read invoice for PDF:', error);
   }
 
-  return INITIAL_INVOICES.find((invoice) => invoice.invoiceNumber === invoiceNumber) ?? null;
+  return null;
 }
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ invoiceNo: string }> }) {

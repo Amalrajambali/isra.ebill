@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { INITIAL_INVOICES } from '@/lib/mock-data';
 import { getAdminDb, isFirestoreConfigured } from '@/lib/firebase-admin';
 import type { Invoice } from '@/lib/types';
 
@@ -19,15 +18,15 @@ async function readInvoicesFromFirestore() {
 
 export async function GET() {
   if (!isFirestoreConfigured()) {
-    return NextResponse.json(INITIAL_INVOICES);
+    return NextResponse.json([]);
   }
 
   try {
     const invoices = await readInvoicesFromFirestore();
-    return NextResponse.json(invoices.length ? invoices : INITIAL_INVOICES);
+    return NextResponse.json(invoices);
   } catch (error) {
     console.error('Failed to read invoices:', error);
-    return NextResponse.json(INITIAL_INVOICES, { status: 200 });
+    return NextResponse.json([], { status: 200 });
   }
 }
 

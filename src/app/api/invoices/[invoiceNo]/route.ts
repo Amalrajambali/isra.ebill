@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { INITIAL_INVOICES } from '@/lib/mock-data';
 import { getAdminDb, isFirestoreConfigured } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
@@ -9,20 +8,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const invoiceNumber = decodeURIComponent(invoiceNo);
 
   if (!isFirestoreConfigured()) {
-    const fallback = INITIAL_INVOICES.find((invoice) => invoice.invoiceNumber === invoiceNumber);
-    if (fallback) {
-      return NextResponse.json({ invoice: fallback });
-    }
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
   }
 
   try {
     const doc = await getAdminDb().collection('invoices').doc(invoiceNumber).get();
     if (!doc.exists) {
-      const fallback = INITIAL_INVOICES.find((invoice) => invoice.invoiceNumber === invoiceNumber);
-      if (fallback) {
-        return NextResponse.json({ invoice: fallback });
-      }
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
