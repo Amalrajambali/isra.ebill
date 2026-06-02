@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,11 +11,12 @@ import { Search, Filter, Eye, Download, MessageSquare, Calendar, Trash2 } from '
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl } from '@/lib/invoice-share';
+import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl, downloadInvoicePdf } from '@/lib/invoice-share';
 import { deleteInvoice, listInvoices } from '@/lib/invoice-api';
 import type { Invoice } from '@/lib/types';
 
 export default function InvoiceHistory() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const { toast } = useToast();
@@ -39,19 +41,8 @@ export default function InvoiceHistory() {
     inv.invoiceNumber.toLowerCase().includes(deferredSearchTerm.toLowerCase())
   ), [invoices, deferredSearchTerm]);
 
-  const openPdf = (invoice: Invoice) => {
-    const pdfUrl = invoice.pdfUrl || buildInvoicePdfUrl(invoice.invoiceNumber, window.location.origin);
-
-    if (!pdfUrl) {
-      toast({
-        variant: 'destructive',
-        title: 'PDF not available',
-        description: 'This invoice does not have a public PDF link yet.',
-      });
-      return;
-    }
-
-    window.open(pdfUrl, '_blank', 'noreferrer');
+  const openDetails = (invoice: Invoice) => {
+    router.push(`/history/${encodeURIComponent(invoice.invoiceNumber)}`);
   };
 
   const resendWhatsApp = async (invoice: Invoice) => {
@@ -68,6 +59,21 @@ export default function InvoiceHistory() {
 
     const message = buildShareMessage({ ...invoice, pdfUrl });
     window.open(buildWhatsAppUrl(invoice.customerMobile, message), '_blank', 'noreferrer');
+  };
+
+  const downloadPdf = (invoice: Invoice) => {
+    const pdfUrl = invoice.pdfUrl || buildInvoicePdfUrl(invoice.invoiceNumber, window.location.origin);
+
+    if (!pdfUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'PDF not available',
+        description: 'The public PDF URL is missing for this invoice.',
+      });
+      return;
+    }
+
+    downloadInvoicePdf({ ...invoice, pdfUrl });
   };
 
   const removeInvoice = async (invoice: Invoice) => {
@@ -139,8 +145,8 @@ export default function InvoiceHistory() {
                       </td>
                       <td className="p-4 text-right">
                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" title="View PDF" onClick={() => openPdf(inv)}><Eye className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" title="Open PDF" onClick={() => openPdf(inv)}><Download className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="View Details" onClick={() => openDetails(inv)}><Eye className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Download PDF" onClick={() => downloadPdf(inv)}><Download className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" title="Send WhatsApp" className="text-[#25D366]" onClick={() => resendWhatsApp(inv)}><MessageSquare className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" title="Delete Invoice" className="text-destructive" onClick={() => removeInvoice(inv)}><Trash2 className="h-4 w-4" /></Button>
                          </div>
