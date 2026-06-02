@@ -92,6 +92,21 @@ export const updateProduct = async (product: Product) => {
   return next;
 };
 
+export const adjustProductStock = async (
+  adjustments: Array<{ productId: string; delta: number }>,
+): Promise<Product[]> => {
+  const products = await loadProducts();
+  const next = products.map((product) => {
+    const adjustment = adjustments.find((item) => item.productId === product.id);
+    if (!adjustment) return product;
+    return {
+      ...product,
+      stockQuantity: Math.max(0, product.stockQuantity + adjustment.delta),
+    };
+  });
+  return await saveProducts(next);
+};
+
 export const deleteProduct = async (productId: string) => {
   const products = await loadProducts();
   const next = await saveProducts(products.filter((item) => item.id !== productId));

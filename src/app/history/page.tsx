@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,10 @@ import type { Invoice } from '@/lib/types';
 
 export default function InvoiceHistory() {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState('');
+  const searchParams = useSearchParams();
+  const queryParam = searchParams?.get('query') ?? '';
+  const insightsMode = searchParams?.get('insights') === '1';
+  const [searchTerm, setSearchTerm] = useState(queryParam);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const { toast } = useToast();
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -31,15 +34,23 @@ export default function InvoiceHistory() {
   }, []);
 
   useEffect(() => {
+    setSearchTerm(queryParam);
+  }, [queryParam]);
+
+  useEffect(() => {
     const onStorage = async () => setInvoices(await listInvoices());
     window.addEventListener('focus', onStorage);
     return () => window.removeEventListener('focus', onStorage);
   }, []);
 
-  const filtered = useMemo(() => invoices.filter(inv => 
-    inv.customerName.toLowerCase().includes(deferredSearchTerm.toLowerCase()) || 
-    inv.invoiceNumber.toLowerCase().includes(deferredSearchTerm.toLowerCase())
-  ), [invoices, deferredSearchTerm]);
+  const filtered = useMemo(() => invoices.filter(inv => {
+    const lower = deferredSearchTerm.toLowerCase();
+    return (
+      inv.customerName.toLowerCase().includes(lower) ||
+      inv.invoiceNumber.toLowerCase().includes(lower) ||
+      inv.customerMobile.toLowerCase().includes(lower)
+    );
+  }), [invoices, deferredSearchTerm]);
 
   const openDetails = (invoice: Invoice) => {
     router.push(`/history/${encodeURIComponent(invoice.invoiceNumber)}`);
@@ -97,26 +108,46 @@ export default function InvoiceHistory() {
 
         <Card className="border-none shadow-md">
           <CardHeader className="pb-4">
-             <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="Search by Invoice #, Customer or Phone..." 
-                    className="pl-10"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2">
-                   <Button variant="outline" className="flex-1 md:w-auto">
-                    <Calendar className="mr-2 h-4 w-4" /> This Month
-                   </Button>
-                   <Button variant="outline" className="flex-1 md:w-auto">
-                    <Filter className="mr-2 h-4 w-4" /> More Filters
-                   </Button>
-                </div>
-             </div>
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by Invoice #, Customer or Phone..."
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1 md:w-auto">
+                  <Calendar className="mr-2 h-4 w-4" /> This Month
+                </Button>
+                <Button variant="outline" className="flex-1 md:w-auto">
+                  <Filter className="mr-2 h-4 w-4" /> More Filters
+                </Button>
+              </div>
+            </div>
           </CardHeader>
+          {insightsMode && filtered.length > 0 && (
+            <CardContent className="grid gap-4 grid-cols-1 lg:grid-cols-3 pb-4">
+              <div className="rounded-2xl border bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">Orders</p>
+                <p className="mt-2 text-3xl font-bold text-primary">{filtered.length}</p>
+              </div>
+              <div className="rounded-2xl border bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">Total Revenue</p>
+                <p className="mt-2 text-3xl font-bold text-secondary">
+                  {formatCurrency(filtered.reduce((sum, inv) => sum + inv.grandTotal, 0))}
+                </p>
+              </div>
+              <div className="rounded-2xl border bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">Last Order</p>
+                <p className="mt-2 text-3xl font-bold text-primary">
+                  {filtered.map((inv) => inv.date).sort().reverse()[0] || 'N/A'}
+                </p>
+              </div>
+            </CardContent>
+          )}
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -144,12 +175,12 @@ export default function InvoiceHistory() {
                         <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 border-none px-2 py-0">PAID</Badge>
                       </td>
                       <td className="p-4 text-right">
-                         <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" title="View Details" onClick={() => openDetails(inv)}><Eye className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" title="Download PDF" onClick={() => downloadPdf(inv)}><Download className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" title="Send WhatsApp" className="text-[#25D366]" onClick={() => resendWhatsApp(inv)}><MessageSquare className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" title="Delete Invoice" className="text-destructive" onClick={() => removeInvoice(inv)}><Trash2 className="h-4 w-4" /></Button>
-                         </div>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" title="View Details" onClick={() => openDetails(inv)}><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" title="Download PDF" onClick={() => downloadPdf(inv)}><Download className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" title="Send WhatsApp" className="text-[#25D366]" onClick={() => resendWhatsApp(inv)}><MessageSquare className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" title="Delete Invoice" className="text-destructive" onClick={() => removeInvoice(inv)}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

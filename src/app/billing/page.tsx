@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl, downloadInvoicePdf } from '@/lib/invoice-share';
 import { listInvoices, upsertInvoice } from '@/lib/invoice-api';
-import { loadProducts } from '@/lib/product-store';
+import { adjustProductStock, loadProducts } from '@/lib/product-store';
 import { addCustomer, loadCustomers, upsertCustomer } from '@/lib/customer-store';
 
 export default function NewInvoice() {
@@ -131,8 +131,14 @@ export default function NewInvoice() {
   const grandTotal = subtotal - totalDiscount;
 
   const handleGenerateInvoice = async () => {
+    const normalizedMobile = (customer.mobile || '').replace(/\D/g, '');
     if (!customer.name || !customer.mobile || items.length === 0) {
       toast({ variant: "destructive", title: "Error", description: "Missing customer details or products." });
+      return;
+    }
+
+    if (normalizedMobile.length !== 10) {
+      toast({ variant: "destructive", title: "Invalid mobile number", description: "Customer mobile must be exactly 10 digits." });
       return;
     }
 
@@ -143,12 +149,12 @@ export default function NewInvoice() {
     const matchedCustomer =
       exactCustomerMatch ??
       customers.find((item) => item.name.trim().toLowerCase() === (customer.name ?? '').trim().toLowerCase()) ??
-      customers.find((item) => item.mobile.replace(/\D/g, '') === (customer.mobile || '').replace(/\D/g, ''));
+      customers.find((item) => item.mobile.replace(/\D/g, '') === normalizedMobile);
 
     const savedCustomer = await upsertCustomer({
       id: matchedCustomer?.id,
       name: customer.name!.trim(),
-      mobile: customer.mobile!.trim(),
+      mobile: normalizedMobile,
       address: customer.address?.trim() || matchedCustomer?.address || '',
       notes: matchedCustomer?.notes,
       totalOrders: (matchedCustomer?.totalOrders ?? 0) + 1,
@@ -176,6 +182,8 @@ export default function NewInvoice() {
     };
 
     await upsertInvoice(invoice);
+    await adjustProductStock(items.map((item) => ({ productId: item.productId, delta: -item.quantity })));
+    setProducts(await loadProducts());
     setSuccessInvoice(invoice);
     setPdfUploadStatus('uploaded');
     setIsGenerating(false);
@@ -192,6 +200,8 @@ export default function NewInvoice() {
   };
 
   const handleAddAsNewCustomer = async () => {
+    const normalizedMobile = (customer.mobile || '').replace(/\D/g, '');
+
     if (!customer.name?.trim() || !customer.mobile?.trim()) {
       toast({
         variant: 'destructive',
@@ -201,9 +211,18 @@ export default function NewInvoice() {
       return;
     }
 
+    if (normalizedMobile.length !== 10) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid mobile number',
+        description: 'Mobile number must be exactly 10 digits.',
+      });
+      return;
+    }
+
     const saved = await addCustomer({
       name: customer.name.trim(),
-      mobile: customer.mobile.trim(),
+      mobile: normalizedMobile,
       address: customer.address?.trim() || '',
       notes: '',
     });
@@ -258,24 +277,24 @@ export default function NewInvoice() {
             </div>
             <h1 className="text-3xl font-headline font-bold text-primary">Invoice Generated</h1>
             <p className="text-muted-foreground">Order Ref: <span className="font-bold text-primary">{successInvoice.invoiceNumber}</span></p>
-            
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-               <div className="p-4 bg-white rounded-lg shadow-sm text-left">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Customer</p>
-                  <p className="font-bold truncate">{successInvoice.customerName}</p>
-               </div>
-               <div className="p-4 bg-white rounded-lg shadow-sm text-left">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Amount</p>
-                  <p className="font-bold text-secondary">{formatCurrency(successInvoice.grandTotal)}</p>
-               </div>
-               <div className="p-4 bg-white rounded-lg shadow-sm text-left">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Items</p>
-                  <p className="font-bold">{successInvoice.items.length}</p>
-               </div>
-               <div className="p-4 bg-white rounded-lg shadow-sm text-left">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Date</p>
-                  <p className="font-bold">{successInvoice.date}</p>
-               </div>
+              <div className="p-4 bg-white rounded-lg shadow-sm text-left">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Customer</p>
+                <p className="font-bold truncate">{successInvoice.customerName}</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg shadow-sm text-left">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Amount</p>
+                <p className="font-bold text-secondary">{formatCurrency(successInvoice.grandTotal)}</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg shadow-sm text-left">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Items</p>
+                <p className="font-bold">{successInvoice.items.length}</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg shadow-sm text-left">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Date</p>
+                <p className="font-bold">{successInvoice.date}</p>
+              </div>
             </div>
 
             <div className="rounded-xl border bg-white/80 p-4 text-left">
@@ -318,8 +337,8 @@ export default function NewInvoice() {
             <CardContent>
               <div className="relative mb-6">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search products..." 
+                <Input
+                  placeholder="Search products..."
                   className="pl-10 h-12"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -327,8 +346,8 @@ export default function NewInvoice() {
                 {deferredSearchTerm && (
                   <div className="absolute z-10 w-full mt-2 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto">
                     {products.filter(p => p.name.toLowerCase().includes(deferredSearchTerm.toLowerCase())).map(p => (
-                      <div 
-                        key={p.id} 
+                      <div
+                        key={p.id}
                         className="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b"
                         onClick={() => addItem(p)}
                       >
@@ -370,16 +389,16 @@ export default function NewInvoice() {
                             </td>
                             <td className="py-4 text-center">
                               <div className="flex items-center justify-center gap-2">
-                                <Button 
-                                  variant="outline" 
-                                  size="icon" 
+                                <Button
+                                  variant="outline"
+                                  size="icon"
                                   className="h-7 w-7"
                                   onClick={() => setItems(items.map(i => i.productId === item.productId ? { ...i, quantity: Math.max(1, i.quantity - 1), total: Math.max(1, i.quantity - 1) * i.price - i.discount } : i))}
                                 >-</Button>
                                 <span className="w-4 text-center">{item.quantity}</span>
-                                <Button 
-                                  variant="outline" 
-                                  size="icon" 
+                                <Button
+                                  variant="outline"
+                                  size="icon"
                                   className="h-7 w-7"
                                   onClick={() => setItems(items.map(i => i.productId === item.productId ? { ...i, quantity: i.quantity + 1, total: (i.quantity + 1) * i.price - i.discount } : i))}
                                 >+</Button>
@@ -387,9 +406,9 @@ export default function NewInvoice() {
                             </td>
                             <td className="py-4 text-right">{formatCurrency(item.price)}</td>
                             <td className="py-4 text-right">
-                              <Input 
-                                type="number" 
-                                className="w-16 h-8 text-right p-1 ml-auto" 
+                              <Input
+                                type="number"
+                                className="w-16 h-8 text-right p-1 ml-auto"
                                 value={item.discount}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value) || 0;
@@ -415,35 +434,35 @@ export default function NewInvoice() {
 
           {aiSuggestions.length > 0 && (
             <Card className="border-none shadow-md bg-white overflow-hidden">
-               <div className="bg-primary/5 p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-secondary" />
-                    <h3 className="font-headline font-bold text-primary">Smart Recommendations</h3>
-                  </div>
-                  <Badge className="bg-secondary">AI POWERED</Badge>
-               </div>
-               <CardContent className="p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {aiSuggestions.map((sug, idx) => {
-                      const prod = products.find(p => p.id === sug.productId);
-                      return prod ? (
-                        <div key={idx} className="p-3 border rounded-lg hover:border-secondary transition-colors group">
-                           <p className="font-bold text-sm truncate">{sug.productName}</p>
-                           <p className="text-[10px] text-muted-foreground uppercase">{sug.category}</p>
-                           <p className="text-xs mt-2 italic text-slate-500 line-clamp-2">{sug.reason}</p>
-                           <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="w-full mt-3 text-secondary border-t rounded-none group-hover:bg-secondary group-hover:text-white"
-                            onClick={() => addItem(prod)}
-                           >
-                            <Plus className="h-3 w-3 mr-1" /> Add to Cart
-                           </Button>
-                        </div>
-                      ) : null;
-                    })}
-                  </div>
-               </CardContent>
+              <div className="bg-primary/5 p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-secondary" />
+                  <h3 className="font-headline font-bold text-primary">Smart Recommendations</h3>
+                </div>
+                <Badge className="bg-secondary">AI POWERED</Badge>
+              </div>
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {aiSuggestions.map((sug, idx) => {
+                    const prod = products.find(p => p.id === sug.productId);
+                    return prod ? (
+                      <div key={idx} className="p-3 border rounded-lg hover:border-secondary transition-colors group">
+                        <p className="font-bold text-sm truncate">{sug.productName}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">{sug.category}</p>
+                        <p className="text-xs mt-2 italic text-slate-500 line-clamp-2">{sug.reason}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full mt-3 text-secondary border-t rounded-none group-hover:bg-secondary group-hover:text-white"
+                          onClick={() => addItem(prod)}
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Add to Cart
+                        </Button>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              </CardContent>
             </Card>
           )}
         </div>
@@ -466,29 +485,34 @@ export default function NewInvoice() {
                 <Label htmlFor="mobile">Mobile Number</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="mobile" 
-                    placeholder="10 digit mobile..." 
+                  <Input
+                    id="mobile"
+                    placeholder="10 digit mobile..."
                     className="pl-10"
+                    inputMode="numeric"
+                    maxLength={10}
                     value={customer.mobile}
-                    onChange={(e) => setCustomer({ ...customer, mobile: e.target.value.replace(/\D/g, '') })}
+                    onChange={(e) => setCustomer({
+                      ...customer,
+                      mobile: e.target.value.replace(/\D/g, '').slice(0, 10),
+                    })}
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="name">Customer Name</Label>
-                <Input 
-                  id="name" 
-                  placeholder="Full Name" 
+                <Input
+                  id="name"
+                  placeholder="Full Name"
                   value={customer.name}
                   onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="address">Address (Optional)</Label>
-                <Input 
-                  id="address" 
-                  placeholder="City/Area" 
+                <Input
+                  id="address"
+                  placeholder="City/Area"
                   value={customer.address}
                   onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
                 />
@@ -522,10 +546,10 @@ export default function NewInvoice() {
                       </div>
                     </>
                   ) : (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
-                          <UserPlus className="h-4 w-4" />
-                          No match found. Add as new customer.
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
+                        <UserPlus className="h-4 w-4" />
+                        No match found. Add as new customer.
                       </div>
                       <Button variant="outline" className="w-full" onClick={handleAddAsNewCustomer}>
                         Add as New Customer
@@ -556,7 +580,7 @@ export default function NewInvoice() {
                 <span className="text-xl font-bold">Total Amount</span>
                 <span className="text-3xl font-bold text-secondary">{formatCurrency(grandTotal)}</span>
               </div>
-              <Button 
+              <Button
                 className="w-full bg-secondary hover:bg-secondary/90 h-14 text-lg shadow-xl text-white"
                 onClick={handleGenerateInvoice}
                 disabled={isGenerating}

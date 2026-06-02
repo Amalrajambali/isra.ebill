@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,11 +60,22 @@ export default function Customers() {
   };
 
   const handleSave = async () => {
+    const normalizedMobile = draft.mobile.replace(/\D/g, '');
+
     if (!draft.name.trim() || !draft.mobile.trim()) {
       toast({
         variant: 'destructive',
         title: 'Missing details',
         description: 'Please enter both customer name and mobile number.',
+      });
+      return;
+    }
+
+    if (normalizedMobile.length !== 10) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid mobile number',
+        description: 'Mobile number must be exactly 10 digits.',
       });
       return;
     }
@@ -83,6 +95,8 @@ export default function Customers() {
       description: `${next.name} has been added to the registry.`,
     });
   };
+
+  const router = useRouter();
 
   return (
     <Shell>
@@ -144,10 +158,20 @@ export default function Customers() {
                 </div>
 
                 <div className="flex gap-2 mt-6">
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => router.push(`/history?query=${encodeURIComponent(c.mobile)}`)}
+                  >
                     <History className="mr-1 h-3 w-3" /> History
                   </Button>
-                  <Button variant="secondary" size="sm" className="flex-1">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => router.push(`/history?query=${encodeURIComponent(c.mobile)}&insights=1`)}
+                  >
                     <Sparkles className="mr-1 h-3 w-3" /> Insights
                   </Button>
                 </div>
@@ -185,9 +209,13 @@ export default function Customers() {
                 <Input
                   id="customer-mobile"
                   value={draft.mobile}
-                  onChange={(e) => setDraft((current) => ({ ...current, mobile: e.target.value }))}
-                  placeholder="10 digit mobile number"
                   inputMode="numeric"
+                  maxLength={10}
+                  onChange={(e) => setDraft((current) => ({
+                    ...current,
+                    mobile: e.target.value.replace(/\D/g, '').slice(0, 10),
+                  }))}
+                  placeholder="10 digit mobile number"
                 />
               </div>
 
