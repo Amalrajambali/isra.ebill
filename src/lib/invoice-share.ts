@@ -30,6 +30,7 @@ export const buildShareMessage = (invoice: Invoice) => {
     'Dear Customer,',
     '',
     'Thank you for shopping with ISRA Churidars & Sarees.',
+    '',
     `Invoice No: ${invoice.invoiceNumber}`,
     `Amount: ${formatWhatsAppAmount(invoice.grandTotal)}`,
     '',
