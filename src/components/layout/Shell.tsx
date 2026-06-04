@@ -4,7 +4,7 @@
 import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ShoppingCart, Package, Users, History, Settings, Menu } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Users, History, Settings, Menu, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -51,11 +51,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[280px] p-0">
-                <SheetHeader className="p-6 text-left border-b">
+              <SheetContent side="left" className="w-[280px] p-0 flex flex-col h-full">
+                <SheetHeader className="p-6 text-left border-b flex-none">
                   <SheetTitle className="font-headline text-2xl">ISRA Ethnics</SheetTitle>
                 </SheetHeader>
-                <nav className="flex flex-col gap-1 p-4">
+                <nav className="flex flex-col gap-1 p-4 flex-grow overflow-y-auto">
                   {navItems.map((item) => {
                     const Icon = item.lucide || item.icon;
                     return (
@@ -76,11 +76,37 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     )
                   })}
                 </nav>
+                <div className="p-4 border-t mt-auto flex-none">
+                  <Button
+                    variant="outline"
+                    className="w-full flex items-center justify-center gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+                    onClick={() => {
+                      setOpen(false);
+                      logout();
+                    }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </Button>
+                </div>
               </SheetContent>
             </Sheet>
             <Link href="/" className="font-headline text-2xl font-bold text-primary">
               ISRA <span className="text-accent">Ethnics</span>
             </Link>
+          </div>
+
+          {/* Mobile Logout Button */}
+          <div className="flex md:hidden items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={logout}
+              title="Logout"
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
           </div>
           
           <div className="hidden md:flex items-center gap-2">
@@ -126,14 +152,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
             )}>
               {typeof Icon !== 'string' && <Icon className={cn("h-6 w-6", isActive && "scale-110")} />}
               <span className="text-[10px] mt-1 font-medium">{item.label}</span>
-          </Link>
-        )
+            </Link>
+          )
         })}
         <button
-          className="flex min-w-[76px] flex-col items-center rounded-lg px-2 py-2 text-muted-foreground"
+          className="flex min-w-[76px] flex-col items-center rounded-lg px-2 py-2 text-muted-foreground hover:text-destructive transition-colors"
           onClick={() => logout()}
         >
-          <span className="text-[10px] font-medium">Logout</span>
+          <LogOut className="h-6 w-6" />
+          <span className="text-[10px] mt-1 font-medium">Logout</span>
         </button>
         </nav>
       </div>
