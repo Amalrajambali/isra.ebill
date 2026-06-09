@@ -39,6 +39,8 @@ export default function Dashboard() {
   const totalProducts = products.length;
   const totalCustomers = customers.length;
   const lowStockCount = products.filter((p) => p.stockQuantity < 5).length;
+  const recentSales = invoices.slice(0, 6);
+  const lowStockItems = products.filter((p) => p.stockQuantity < 10).slice(0, 6);
 
   return (
     <Shell>
@@ -107,8 +109,8 @@ export default function Dashboard() {
               <CardTitle className="font-headline">Recent Sales</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {invoices.map((inv) => (
+              <div className="max-h-[18rem] space-y-4 overflow-y-auto pr-1">
+                {recentSales.map((inv) => (
                   <div key={inv.id} className="flex items-center justify-between p-3 border-b last:border-0">
                     <div>
                       <p className="font-bold text-primary">{inv.customerName}</p>
@@ -132,8 +134,8 @@ export default function Dashboard() {
               <CardTitle className="font-headline">Inventory Alerts</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {products.filter(p => p.stockQuantity < 10).map((p) => (
+              <div className="max-h-[18rem] space-y-4 overflow-y-auto pr-1">
+                {lowStockItems.map((p) => (
                   <div key={p.id} className="flex items-center justify-between p-3 border-b last:border-0">
                     <div>
                       <p className="font-bold text-primary">{p.name}</p>

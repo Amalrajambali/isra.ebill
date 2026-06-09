@@ -60,7 +60,7 @@ export default function AddProducts() {
           p.name.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
           p.category.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
           p.id.includes(deferredSearchTerm),
-    ),
+      ),
     [products, deferredSearchTerm],
   );
 
@@ -152,16 +152,11 @@ export default function AddProducts() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filteredProducts.map((p) => (
             <Card key={p.id} className="group overflow-hidden border-none shadow-md transition-shadow hover:shadow-lg">
-              <div className="relative flex h-44 items-center justify-center bg-slate-100">
-                <Package className="h-16 w-16 text-slate-300 transition-transform group-hover:scale-110" />
-                {p.stockQuantity < 5 && (
-                  <Badge variant="destructive" className="absolute right-3 top-3 animate-pulse">
-                    LOW STOCK
-                  </Badge>
-                )}
-                <Badge className="absolute bottom-3 left-3 bg-white text-primary hover:bg-white">{p.category}</Badge>
-              </div>
               <CardContent className="space-y-4 p-4">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-primary/10 text-primary hover:bg-primary/10">{p.category}</Badge>
+                  {p.stockQuantity < 5 && <Badge variant="destructive">LOW STOCK</Badge>}
+                </div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-bold leading-none">{p.name}</h3>
