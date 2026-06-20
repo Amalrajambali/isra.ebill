@@ -99,24 +99,30 @@ function drawItemsTable(pdf: jsPDF, invoice: Invoice) {
   const width = pdf.internal.pageSize.getWidth();
   const right = width - 18;
   let y = 92;
-  const rowTop = y;
 
   const columns = [
-    { label: 'DESCRIPTION', x: left + 3, width: 72 },
-    { label: 'PRICE', x: left + 84, width: 24, align: 'right' as const },
-    { label: 'QTY', x: left + 110, width: 14, align: 'center' as const },
-    { label: 'DISCOUNT', x: left + 128, width: 22, align: 'center' as const },
-    { label: 'AMOUNT', x: right - 18, width: 22, align: 'right' as const },
+    { label: 'DESCRIPTION', x: left + 3, align: 'left' as const },
+    { label: 'PRICE', x: left + 98, align: 'right' as const },
+    { label: 'QTY', x: left + 117, align: 'center' as const },
+    { label: 'DISCOUNT', x: left + 139, align: 'center' as const },
+    { label: 'AMOUNT', x: right - 4, align: 'right' as const },
   ];
 
+  // Draw header background block
   pdf.setFillColor(...COLORS.soft);
+  pdf.rect(left, y, right - left, 11, 'F');
+
+  // Draw header borders
   pdf.setDrawColor(...COLORS.line);
-  pdf.rect(left, y, right - left, 11, 'FD');
+  pdf.setLineWidth(0.4);
+  pdf.line(left, y, right, y);
+  pdf.line(left, y + 11, right, y + 11);
+
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(8);
   pdf.setTextColor(...COLORS.muted);
   columns.forEach((col) => {
-    pdf.text(col.label, col.x, y + 7, { align: col.align ?? 'left' });
+    pdf.text(col.label, col.x, y + 7, { align: col.align });
   });
 
   y += 11;
@@ -126,8 +132,11 @@ function drawItemsTable(pdf: jsPDF, invoice: Invoice) {
 
   invoice.items.forEach((item) => {
     const rowHeight = Math.max(16, item.productName.length > 34 ? 20 : 16);
+    
+    // Draw row bottom line
     pdf.setDrawColor(...COLORS.line);
-    pdf.rect(left, y, right - left, rowHeight);
+    pdf.setLineWidth(0.4);
+    pdf.line(left, y + rowHeight, right, y + rowHeight);
 
     const name = pdf.splitTextToSize(item.productName, 70);
     pdf.setFont('helvetica', 'bold');
@@ -139,11 +148,11 @@ function drawItemsTable(pdf: jsPDF, invoice: Invoice) {
 
     pdf.setFontSize(9.5);
     pdf.setTextColor(...COLORS.ink);
-    pdf.text(currency(item.price), left + 98, y + 10, { align: 'right' });
-    pdf.text(String(item.quantity), left + 117, y + 10, { align: 'center' });
-    pdf.text(item.discount > 0 ? `-${currency(item.discount)}` : '-', left + 139, y + 10, { align: 'center' });
+    pdf.text(currency(item.price), columns[1].x, y + 10, { align: columns[1].align });
+    pdf.text(String(item.quantity), columns[2].x, y + 10, { align: columns[2].align });
+    pdf.text(item.discount > 0 ? `-${currency(item.discount)}` : '-', columns[3].x, y + 10, { align: columns[3].align });
     pdf.setFont('helvetica', 'bold');
-    pdf.text(currency(item.total), right - 4, y + 10, { align: 'right' });
+    pdf.text(currency(item.total), columns[4].x, y + 10, { align: columns[4].align });
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(...COLORS.ink);
 
@@ -183,13 +192,16 @@ function drawSummary(pdf: jsPDF, invoice: Invoice, y: number) {
   pdf.text(currency(invoice.grandTotal), valueX, y + 31, { align: 'right' });
 
   pdf.setDrawColor(...COLORS.line);
+  pdf.setLineWidth(0.4);
   pdf.line(left, y + 42, right, y + 42);
+
+  return y + 42;
 }
 
-function drawFooter(pdf: jsPDF) {
+function drawFooter(pdf: jsPDF, yAfterSummary: number) {
   const width = pdf.internal.pageSize.getWidth();
   const left = 18;
-  const y = 187;
+  const y = yAfterSummary + 12;
 
   pdf.setTextColor(...COLORS.ink);
   pdf.setFont('times', 'italic');
@@ -200,12 +212,10 @@ function drawFooter(pdf: jsPDF) {
 
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(7.5);
-  pdf.setCharSpace(0.8);
-  pdf.setTextColor(...COLORS.line);
+  pdf.setTextColor(...COLORS.muted);
   pdf.text('VISIT US AGAIN FOR THE LATEST SAREE & CHURIDAR COLLECTIONS', width / 2, y + 6, {
     align: 'center',
   });
-  pdf.setCharSpace(0);
 }
 
 export function createInvoicePdfBuffer(invoice: Invoice) {
@@ -215,8 +225,8 @@ export function createInvoicePdfBuffer(invoice: Invoice) {
   drawHeader(pdf, invoice);
   drawBilledTo(pdf, invoice);
   const yAfterTable = drawItemsTable(pdf, invoice);
-  drawSummary(pdf, invoice, yAfterTable + 8);
-  drawFooter(pdf);
+  const yAfterSummary = drawSummary(pdf, invoice, yAfterTable + 8);
+  drawFooter(pdf, yAfterSummary);
 
   return Buffer.from(pdf.output('arraybuffer'));
 }
