@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { InvoiceItem, Customer, Product, Invoice } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { customerPurchaseSuggestions } from '@/ai/flows/customer-purchase-suggestions';
 import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl, downloadInvoicePdf } from '@/lib/invoice-share';
 import { listInvoices, upsertInvoice } from '@/lib/invoice-api';
 import { adjustProductStock, loadProducts } from '@/lib/product-store';
@@ -26,12 +25,24 @@ export default function NewInvoice() {
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [successInvoice, setSuccessInvoice] = useState<Invoice | null>(null);
   const [pdfUploadStatus, setPdfUploadStatus] = useState<'idle' | 'uploaded'>('idle');
   const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const deferredCustomerSearchTerm = useDeferredValue(customerSearchTerm);
   const deferredCustomerName = useDeferredValue(customer.name ?? '');
   const deferredCustomerMobile = useDeferredValue(customer.mobile ?? '');
+
+  const searchMatches = useMemo(() => {
+    const query = deferredCustomerSearchTerm.trim().toLowerCase();
+    if (!query) return [];
+    const normalizedQuery = query.replace(/\D/g, '');
+    return customers.filter((item) => {
+      const nameMatch = item.name.toLowerCase().includes(query);
+      const mobileMatch = normalizedQuery && item.mobile.replace(/\D/g, '').includes(normalizedQuery);
+      return Boolean(nameMatch || mobileMatch);
+    });
+  }, [customers, deferredCustomerSearchTerm]);
 
   const normalizedCustomerMobile = deferredCustomerMobile.replace(/\D/g, '');
   const customerMatches = useMemo(() => {
@@ -84,27 +95,6 @@ export default function NewInvoice() {
     } while (existingNumbers.has(candidate));
 
     return candidate;
-  };
-
-  const loadSuggestions = async (cust: Customer) => {
-    try {
-      const suggestions = await customerPurchaseSuggestions({
-        customerId: cust.id,
-        purchaseHistory: [
-          { productId: '1', productName: 'Banarasi Silk Saree', category: 'Saree', quantity: 1, price: 4500 }
-        ],
-        currentInventory: products.map(p => ({
-          productId: p.id,
-          productName: p.name,
-          category: p.category,
-          sellingPrice: p.sellingPrice,
-          stockQuantity: p.stockQuantity
-        }))
-      });
-      setAiSuggestions(suggestions.suggestions);
-    } catch (e) {
-      console.error("AI Error:", e);
-    }
   };
 
   const addItem = (product: Product) => {
@@ -164,7 +154,6 @@ export default function NewInvoice() {
     setCustomers(await loadCustomers());
     setCustomer(savedCustomer);
     setIsExistingCustomer(true);
-    loadSuggestions(savedCustomer);
     const invoice: Invoice = {
       id: Math.random().toString(36).substr(2, 9),
       invoiceNumber,
@@ -192,7 +181,6 @@ export default function NewInvoice() {
   const handleSelectCustomer = (selected: Customer) => {
     setCustomer(selected);
     setIsExistingCustomer(true);
-    loadSuggestions(selected);
     toast({
       title: 'Customer selected',
       description: `${selected.name} has been filled in for this invoice.`,
@@ -230,7 +218,6 @@ export default function NewInvoice() {
     setCustomers(await loadCustomers());
     setCustomer(saved);
     setIsExistingCustomer(true);
-    loadSuggestions(saved);
     toast({
       title: 'Customer added',
       description: `${saved.name} is now saved in the registry.`,
@@ -431,40 +418,6 @@ export default function NewInvoice() {
               </div>
             </CardContent>
           </Card>
-
-          {aiSuggestions.length > 0 && (
-            <Card className="border-none shadow-md bg-white overflow-hidden">
-              <div className="bg-primary/5 p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-secondary" />
-                  <h3 className="font-headline font-bold text-primary">Smart Recommendations</h3>
-                </div>
-                <Badge className="bg-secondary">AI POWERED</Badge>
-              </div>
-              <CardContent className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {aiSuggestions.map((sug, idx) => {
-                    const prod = products.find(p => p.id === sug.productId);
-                    return prod ? (
-                      <div key={idx} className="p-3 border rounded-lg hover:border-secondary transition-colors group">
-                        <p className="font-bold text-sm truncate">{sug.productName}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase">{sug.category}</p>
-                        <p className="text-xs mt-2 italic text-slate-500 line-clamp-2">{sug.reason}</p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full mt-3 text-secondary border-t rounded-none group-hover:bg-secondary group-hover:text-white"
-                          onClick={() => addItem(prod)}
-                        >
-                          <Plus className="h-3 w-3 mr-1" /> Add to Cart
-                        </Button>
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         <div className="space-y-6">
@@ -474,88 +427,148 @@ export default function NewInvoice() {
                 <User className="h-5 w-5" /> Customer Info
               </CardTitle>
               {customer.name || customer.mobile ? (
-                <Badge variant={isExistingCustomer ? 'secondary' : 'outline'} className={isExistingCustomer ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}>
-                  {isExistingCustomer ? <UserCheck className="h-3 w-3 mr-1" /> : <UserPlus className="h-3 w-3 mr-1" />}
-                  {isExistingCustomer ? 'Registered' : 'New Customer'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={isExistingCustomer ? 'secondary' : 'outline'} className={isExistingCustomer ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}>
+                    {isExistingCustomer ? <UserCheck className="h-3 w-3 mr-1" /> : <UserPlus className="h-3 w-3 mr-1" />}
+                    {isExistingCustomer ? 'Registered' : 'New Customer'}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    onClick={() => {
+                      setCustomer({ name: '', mobile: '', address: '' });
+                      setIsExistingCustomer(false);
+                      setCustomerSearchTerm('');
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </div>
               ) : null}
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Search Customer Bar */}
               <div className="space-y-2">
-                <Label htmlFor="mobile">Mobile Number</Label>
+                <Label htmlFor="customer-search" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Search Registered Customer</Label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="mobile"
-                    placeholder="10 digit mobile..."
-                    className="pl-10"
-                    inputMode="numeric"
-                    maxLength={10}
-                    value={customer.mobile}
-                    onChange={(e) => setCustomer({
-                      ...customer,
-                      mobile: e.target.value.replace(/\D/g, '').slice(0, 10),
-                    })}
+                    id="customer-search"
+                    placeholder="Search by name or mobile number..."
+                    className="pl-10 h-11"
+                    value={customerSearchTerm}
+                    onChange={(e) => setCustomerSearchTerm(e.target.value)}
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="name">Customer Name</Label>
-                <Input
-                  id="name"
-                  placeholder="Full Name"
-                  value={customer.name}
-                  onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Address (Optional)</Label>
-                <Input
-                  id="address"
-                  placeholder="City/Area"
-                  value={customer.address}
-                  onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
-                />
+
+              {/* Already registered result on top */}
+              {!isExistingCustomer && (searchMatches.length > 0 || customerMatches.length > 0) && (
+                <div className="rounded-xl border border-secondary/20 bg-secondary/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                    <UserCheck className="h-4 w-4 text-secondary" />
+                    Already registered, please select
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {Array.from(new Map([...searchMatches, ...customerMatches].map(item => [item.id, item])).values())
+                      .slice(0, 4)
+                      .map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="w-full rounded-lg border bg-white px-3 py-2 text-left transition-colors hover:border-secondary hover:bg-secondary/5 flex items-center justify-between gap-3 shadow-sm"
+                          onClick={() => {
+                            handleSelectCustomer(item);
+                            setCustomerSearchTerm('');
+                          }}
+                        >
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm text-primary truncate">{item.name}</p>
+                            <p className="text-xs text-muted-foreground">{item.mobile}</p>
+                          </div>
+                          <Badge variant="secondary" className="bg-secondary/15 text-secondary hover:bg-secondary/20 border-none text-[10px]">Select</Badge>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 my-4 pt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mobile">Mobile Number</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="mobile"
+                      placeholder="10 digit mobile..."
+                      className="pl-10"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={customer.mobile || ''}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setCustomer({
+                          ...customer,
+                          mobile: val,
+                        });
+                        
+                        // Auto-link if exact mobile match is typed
+                        if (val.length === 10) {
+                          const exactMatch = customers.find(c => c.mobile.replace(/\D/g, '') === val);
+                          if (exactMatch) {
+                            setCustomer(exactMatch);
+                            setIsExistingCustomer(true);
+                            toast({
+                              title: 'Registered customer loaded',
+                              description: `${exactMatch.name} has been auto-filled.`,
+                            });
+                            return;
+                          }
+                        }
+                        setIsExistingCustomer(false);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="name">Customer Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="Full Name"
+                    value={customer.name || ''}
+                    onChange={(e) => {
+                      setCustomer({ ...customer, name: e.target.value });
+                      setIsExistingCustomer(false);
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address (Optional)</Label>
+                  <Input
+                    id="address"
+                    placeholder="City/Area"
+                    value={customer.address || ''}
+                    onChange={(e) => {
+                      setCustomer({ ...customer, address: e.target.value });
+                      setIsExistingCustomer(false);
+                    }}
+                  />
+                </div>
               </div>
 
-              {(customer.name || customer.mobile) && (
-                <div className="rounded-xl border bg-slate-50 p-4 space-y-3">
-                  {customerMatches.length > 0 ? (
-                    <>
-                      <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                        <UserCheck className="h-4 w-4 text-green-600" />
-                        Already registered, please select
-                      </div>
-                      <div className="space-y-2">
-                        {customerMatches.slice(0, 4).map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="w-full rounded-lg border bg-white px-3 py-2 text-left transition-colors hover:border-secondary hover:bg-secondary/5"
-                            onClick={() => handleSelectCustomer(item)}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="font-semibold truncate">{item.name}</p>
-                                <p className="text-xs text-muted-foreground">{item.mobile}</p>
-                              </div>
-                              <Badge variant="outline">Select</Badge>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
-                        <UserPlus className="h-4 w-4" />
-                        No match found. Add as new customer.
-                      </div>
-                      <Button variant="outline" className="w-full" onClick={handleAddAsNewCustomer}>
-                        Add as New Customer
-                      </Button>
-                    </div>
-                  )}
+              {/* Save as New Customer button (only show when name and 10-digit mobile are entered, not already registered, and no matching customer exists) */}
+              {!isExistingCustomer && customer.name?.trim() && customer.mobile?.replace(/\D/g, '').length === 10 && customerMatches.length === 0 && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3 mt-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
+                    <UserPlus className="h-4 w-4" />
+                    New customer details entered.
+                  </div>
+                  <Button variant="outline" className="w-full border-blue-200 hover:bg-blue-50 text-blue-700 hover:text-blue-800" onClick={handleAddAsNewCustomer}>
+                    Add as New Customer
+                  </Button>
                 </div>
               )}
             </CardContent>
