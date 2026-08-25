@@ -11,6 +11,9 @@ interface InvoicePDFProps {
 }
 
 export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, settings }) => {
+  const customerName = invoice.customerName?.trim() || 'Walk-in Customer';
+  const customerMobile = invoice.customerMobile?.trim();
+
   return (
     <div
       id="invoice-document"
@@ -52,8 +55,8 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, settings }) => 
           Billed To
         </h3>
         <div className="mt-6 text-sm">
-          <p className="text-xl font-bold text-slate-900">{invoice.customerName}</p>
-          <p className="mt-1 text-slate-600">{invoice.customerMobile}</p>
+          <p className="text-xl font-bold text-slate-900">{customerName}</p>
+          <p className="mt-1 text-slate-600">{customerMobile || 'No mobile number'}</p>
           <p className="max-w-sm text-slate-600">{invoice.customerAddress}</p>
         </div>
       </div>

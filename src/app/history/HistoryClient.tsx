@@ -14,6 +14,9 @@ import { buildInvoicePdfUrl, buildShareMessage, buildWhatsAppUrl, downloadInvoic
 import { deleteInvoice, listInvoices } from '@/lib/invoice-api';
 import type { Invoice } from '@/lib/types';
 
+const getCustomerLabel = (invoice: Invoice) => invoice.customerName?.trim() || 'Walk-in Customer';
+const getCustomerMobileLabel = (invoice: Invoice) => invoice.customerMobile?.trim() || 'No mobile number';
+
 export default function HistoryClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -45,9 +48,9 @@ export default function HistoryClient() {
     const filtered = useMemo(() => invoices.filter(inv => {
         const lower = deferredSearchTerm.toLowerCase();
         return (
-            inv.customerName.toLowerCase().includes(lower) ||
+            getCustomerLabel(inv).toLowerCase().includes(lower) ||
             inv.invoiceNumber.toLowerCase().includes(lower) ||
-            inv.customerMobile.toLowerCase().includes(lower)
+            getCustomerMobileLabel(inv).toLowerCase().includes(lower)
         );
     }), [invoices, deferredSearchTerm]);
 
@@ -68,6 +71,15 @@ export default function HistoryClient() {
         }
 
         const message = buildShareMessage({ ...invoice, pdfUrl });
+        if (!invoice.customerMobile) {
+            toast({
+                variant: 'destructive',
+                title: 'No mobile number',
+                description: 'This invoice does not have a customer phone number to send WhatsApp.',
+            });
+            return;
+        }
+
         window.open(buildWhatsAppUrl(invoice.customerMobile, message), '_blank', 'noreferrer');
     };
 
@@ -166,8 +178,8 @@ export default function HistoryClient() {
                                                 <p className="text-xs text-muted-foreground">{formatDate(inv.date)}</p>
                                             </td>
                                             <td className="p-4">
-                                                <p className="font-bold">{inv.customerName}</p>
-                                                <p className="text-xs text-muted-foreground">{inv.customerMobile}</p>
+                                                <p className="font-bold">{getCustomerLabel(inv)}</p>
+                                                <p className="text-xs text-muted-foreground">{getCustomerMobileLabel(inv)}</p>
                                             </td>
                                             <td className="p-4 text-right">
                                                 <p className="font-bold text-secondary">{formatCurrency(inv.grandTotal)}</p>

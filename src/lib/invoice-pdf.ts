@@ -14,6 +14,14 @@ function currency(value: number) {
   return `Rs ${value.toLocaleString('en-IN')}`;
 }
 
+function customerName(invoice: Invoice) {
+  return invoice.customerName?.trim() || 'Walk-in Customer';
+}
+
+function customerMobile(invoice: Invoice) {
+  return invoice.customerMobile?.trim();
+}
+
 function drawHeader(pdf: jsPDF, invoice: Invoice) {
   const width = pdf.internal.pageSize.getWidth();
   const left = 18;
@@ -78,13 +86,14 @@ function drawBilledTo(pdf: jsPDF, invoice: Invoice) {
   y += 12;
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(14);
-  pdf.text(invoice.customerName, left, y);
+  pdf.text(customerName(invoice), left, y);
 
   y += 6;
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(10);
   pdf.setTextColor(...COLORS.muted);
-  pdf.text(invoice.customerMobile, left, y);
+  const mobile = customerMobile(invoice);
+  pdf.text(mobile || 'No mobile number', left, y);
 
   if (invoice.customerAddress) {
     y += 5;

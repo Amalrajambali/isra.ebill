@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ShoppingCart, Plus, Trash2, Save, Sparkles, User, Search, Phone, UserCheck, UserPlus, Share2, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
@@ -16,9 +17,12 @@ import { listInvoices, upsertInvoice } from '@/lib/invoice-api';
 import { adjustProductStock, loadProducts } from '@/lib/product-store';
 import { addCustomer, loadCustomers, upsertCustomer } from '@/lib/customer-store';
 
+const WALK_IN_CUSTOMER_NAME = 'Walk-in Customer';
+
 export default function NewInvoice() {
   const { toast } = useToast();
   const [customer, setCustomer] = useState<Partial<Customer>>({ name: '', mobile: '', address: '' });
+  const [isWalkInCustomer, setIsWalkInCustomer] = useState(false);
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -121,13 +125,14 @@ export default function NewInvoice() {
   const grandTotal = subtotal - totalDiscount;
 
   const handleGenerateInvoice = async () => {
+    const rawName = customer.name?.trim() || '';
     const normalizedMobile = (customer.mobile || '').replace(/\D/g, '');
-    if (!customer.name || !customer.mobile || items.length === 0) {
-      toast({ variant: "destructive", title: "Error", description: "Missing customer details or products." });
+    if (items.length === 0) {
+      toast({ variant: "destructive", title: "Error", description: "Add at least one product." });
       return;
     }
 
-    if (normalizedMobile.length !== 10) {
+    if (normalizedMobile && normalizedMobile.length !== 10) {
       toast({ variant: "destructive", title: "Invalid mobile number", description: "Customer mobile must be exactly 10 digits." });
       return;
     }
@@ -136,24 +141,41 @@ export default function NewInvoice() {
     const invoiceNumber = await generateUniqueInvoiceNumber();
     const pdfUrl = buildInvoicePdfUrl(invoiceNumber, window.location.origin);
     const today = new Date().toISOString().split('T')[0];
+    const hasCustomerInfo = !isWalkInCustomer && Boolean(rawName || normalizedMobile);
     const matchedCustomer =
-      exactCustomerMatch ??
-      customers.find((item) => item.name.trim().toLowerCase() === (customer.name ?? '').trim().toLowerCase()) ??
-      customers.find((item) => item.mobile.replace(/\D/g, '') === normalizedMobile);
+      hasCustomerInfo
+        ? exactCustomerMatch ??
+          customers.find((item) => item.name.trim().toLowerCase() === rawName.toLowerCase()) ??
+          (normalizedMobile ? customers.find((item) => item.mobile.replace(/\D/g, '') === normalizedMobile) : undefined)
+        : undefined;
 
-    const savedCustomer = await upsertCustomer({
-      id: matchedCustomer?.id,
-      name: customer.name!.trim(),
-      mobile: normalizedMobile,
-      address: customer.address?.trim() || matchedCustomer?.address || '',
-      notes: matchedCustomer?.notes,
-      totalOrders: (matchedCustomer?.totalOrders ?? 0) + 1,
-      lastPurchaseDate: today,
-    });
+    const savedCustomer = hasCustomerInfo
+      ? await upsertCustomer({
+          id: matchedCustomer?.id,
+          name: rawName || matchedCustomer?.name || WALK_IN_CUSTOMER_NAME,
+          mobile: normalizedMobile || matchedCustomer?.mobile || '',
+          address: customer.address?.trim() || matchedCustomer?.address || '',
+          notes: matchedCustomer?.notes,
+          totalOrders: (matchedCustomer?.totalOrders ?? 0) + 1,
+          lastPurchaseDate: today,
+        })
+      : {
+          id: '',
+          name: WALK_IN_CUSTOMER_NAME,
+          mobile: '',
+          address: '',
+          totalOrders: 0,
+        };
 
-    setCustomers(await loadCustomers());
-    setCustomer(savedCustomer);
-    setIsExistingCustomer(true);
+    if (hasCustomerInfo) {
+      setCustomers(await loadCustomers());
+      setCustomer(savedCustomer);
+      setIsExistingCustomer(true);
+    } else {
+      setCustomer({ name: '', mobile: '', address: '' });
+      setIsExistingCustomer(false);
+    }
+
     const invoice: Invoice = {
       id: Math.random().toString(36).substr(2, 9),
       invoiceNumber,
@@ -240,6 +262,14 @@ export default function NewInvoice() {
 
   const handleShare = async () => {
     if (!successInvoice) return;
+    if (!successInvoice.customerMobile) {
+      toast({
+        variant: 'destructive',
+        title: 'No mobile number',
+        description: 'This invoice has no customer phone number to share on WhatsApp.',
+      });
+      return;
+    }
 
     if (pdfUploadStatus !== 'uploaded' || !successInvoice.pdfUrl) {
       toast({
@@ -426,17 +456,18 @@ export default function NewInvoice() {
               <CardTitle className="font-headline flex items-center gap-2">
                 <User className="h-5 w-5" /> Customer Info
               </CardTitle>
-              {customer.name || customer.mobile ? (
+              {isWalkInCustomer || customer.name || customer.mobile ? (
                 <div className="flex items-center gap-2">
                   <Badge variant={isExistingCustomer ? 'secondary' : 'outline'} className={isExistingCustomer ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}>
                     {isExistingCustomer ? <UserCheck className="h-3 w-3 mr-1" /> : <UserPlus className="h-3 w-3 mr-1" />}
-                    {isExistingCustomer ? 'Registered' : 'New Customer'}
+                    {isWalkInCustomer ? 'Walk-in' : isExistingCustomer ? 'Registered' : 'New Customer'}
                   </Badge>
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                     onClick={() => {
+                      setIsWalkInCustomer(false);
                       setCustomer({ name: '', mobile: '', address: '' });
                       setIsExistingCustomer(false);
                       setCustomerSearchTerm('');
@@ -448,6 +479,28 @@ export default function NewInvoice() {
               ) : null}
             </CardHeader>
             <CardContent className="space-y-4">
+              <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 cursor-pointer">
+                <Checkbox
+                  id="walk-in-customer"
+                  checked={isWalkInCustomer}
+                  onCheckedChange={(checked) => {
+                    const enabled = checked === true;
+                    setIsWalkInCustomer(enabled);
+                    if (enabled) {
+                      setCustomer({ name: '', mobile: '', address: '' });
+                      setIsExistingCustomer(false);
+                      setCustomerSearchTerm('');
+                    }
+                  }}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-amber-900">Walk-in customer</span>
+                  <span className="block text-xs text-amber-800">No name or mobile number. This sale will still be included in reports.</span>
+                </span>
+              </label>
+
+              {!isWalkInCustomer && <>
               {/* Search Customer Bar */}
               <div className="space-y-2">
                 <Label htmlFor="customer-search" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Search Registered Customer</Label>
@@ -558,9 +611,10 @@ export default function NewInvoice() {
                   />
                 </div>
               </div>
+              </>}
 
               {/* Save as New Customer button (only show when name and 10-digit mobile are entered, not already registered, and no matching customer exists) */}
-              {!isExistingCustomer && customer.name?.trim() && customer.mobile?.replace(/\D/g, '').length === 10 && customerMatches.length === 0 && (
+              {!isWalkInCustomer && !isExistingCustomer && customer.name?.trim() && customer.mobile?.replace(/\D/g, '').length === 10 && customerMatches.length === 0 && (
                 <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3 mt-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
                     <UserPlus className="h-4 w-4" />

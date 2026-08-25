@@ -14,6 +14,8 @@ import { loadCustomers } from '@/lib/customer-store';
 import { listInvoices } from '@/lib/invoice-api';
 import type { Product, Customer, Invoice } from '@/lib/types';
 
+const getCustomerLabel = (invoice: Invoice) => invoice.customerName?.trim() || 'Walk-in Customer';
+
 export default function Dashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -113,7 +115,7 @@ export default function Dashboard() {
                 {recentSales.map((inv) => (
                   <div key={inv.id} className="flex items-center justify-between p-3 border-b last:border-0">
                     <div>
-                      <p className="font-bold text-primary">{inv.customerName}</p>
+                      <p className="font-bold text-primary">{getCustomerLabel(inv)}</p>
                       <p className="text-xs text-muted-foreground">{inv.invoiceNumber} • {inv.date}</p>
                     </div>
                     <div className="text-right">

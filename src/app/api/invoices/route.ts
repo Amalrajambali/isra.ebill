@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 function normalizeInvoice(payload: unknown): Invoice | null {
   if (!payload || typeof payload !== 'object') return null;
   const invoice = payload as Invoice;
-  if (!invoice.invoiceNumber || !invoice.customerName || !invoice.customerMobile) return null;
+  if (!invoice.invoiceNumber) return null;
   return invoice;
 }
 
