@@ -64,14 +64,16 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-none shadow-md bg-white">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
-              <IndianRupee className="h-4 w-4 text-secondary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">{formatCurrency(totalSales)}</div>
-              <p className="text-xs text-muted-foreground mt-1">+12% from last month</p>
-            </CardContent>
+            <Link href="/reports" className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+                <IndianRupee className="h-4 w-4 text-secondary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">{formatCurrency(totalSales)}</div>
+                <p className="text-xs text-secondary mt-1">Open monthly revenue report</p>
+              </CardContent>
+            </Link>
           </Card>
           <Card className="border-none shadow-md bg-white">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">

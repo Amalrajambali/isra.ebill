@@ -4,7 +4,7 @@
 import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ShoppingCart, Package, Users, History, Settings, Menu, LogOut } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Users, History, Settings, Menu, LogOut, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ const navItems = [
   { label: 'Add Product', icon: Package, href: '/inventory' },
   { label: 'Customers', icon: '/customers', href: '/customers', lucide: Users },
   { label: 'History', icon: History, href: '/history' },
+  { label: 'Reports', icon: BarChart3, href: '/reports' },
   { label: 'Settings', icon: Settings, href: '/settings' },
 ];
 
