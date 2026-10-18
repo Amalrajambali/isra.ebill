@@ -6,17 +6,18 @@ import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { UserPlus, Search, Phone, MapPin, History, Sparkles, Save, X } from 'lucide-react';
+import { UserPlus, Search, Phone, MapPin, History, Sparkles, Save, X, Pencil } from 'lucide-react';
 import { Customer } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { addCustomer, loadCustomers } from '@/lib/customer-store';
+import { addCustomer, loadCustomers, updateCustomer } from '@/lib/customer-store';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type CustomerDraft = {
+  id?: string;
   name: string;
   mobile: string;
   address: string;
@@ -66,6 +67,16 @@ export default function Customers() {
     setDialogOpen(true);
   };
 
+  const openEditDialog = (customer: Customer) => {
+    setDraft({
+      id: customer.id,
+      name: customer.name,
+      mobile: customer.mobile,
+      address: customer.address,
+    });
+    setDialogOpen(true);
+  };
+
   const handleSave = async () => {
     const normalizedMobile = draft.mobile.replace(/\D/g, '');
 
@@ -87,21 +98,54 @@ export default function Customers() {
       return;
     }
 
+    const duplicateMobile = customers.find((customer) =>
+      customer.id !== draft.id && customer.mobile.replace(/\D/g, '') === normalizedMobile,
+    );
+    if (duplicateMobile) {
+      toast({
+        variant: 'destructive',
+        title: 'Mobile number already in use',
+        description: `This number belongs to ${duplicateMobile.name}.`,
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const next = await addCustomer({
-        name: draft.name.trim(),
-        mobile: draft.mobile.trim(),
-        address: draft.address.trim(),
-        notes: '',
-      });
+      let next: Customer;
+      if (draft.id) {
+        const existing = customers.find((customer) => customer.id === draft.id);
+        if (!existing) throw new Error('Customer no longer exists. Refresh the page and try again.');
+        const updatedCustomer = {
+          ...existing,
+          name: draft.name.trim(),
+          mobile: normalizedMobile,
+          address: draft.address.trim(),
+        };
+        const updatedCustomers = await updateCustomer(updatedCustomer);
+        next = updatedCustomers.find((customer) => customer.id === draft.id) ?? updatedCustomer;
+        setCustomers(updatedCustomers);
+      } else {
+        next = await addCustomer({
+          name: draft.name.trim(),
+          mobile: normalizedMobile,
+          address: draft.address.trim(),
+          notes: '',
+        });
+        setCustomers(await loadCustomers());
+      }
 
-      setCustomers(await loadCustomers());
       setDialogOpen(false);
       setDraft(emptyDraft);
       toast({
-        title: 'Customer saved',
-        description: `${next.name} has been added to the registry.`,
+        title: draft.id ? 'Customer updated' : 'Customer saved',
+        description: draft.id ? `${next.name}'s details have been updated.` : `${next.name} has been added to the registry.`,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: draft.id ? 'Customer update failed' : 'Customer save failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
       });
     } finally {
       setIsSaving(false);
@@ -144,8 +188,13 @@ export default function Customers() {
                       {c.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <h3 className="font-bold text-lg leading-none">{c.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="truncate font-bold text-lg leading-none">{c.name}</h3>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => openEditDialog(c)} title={`Edit ${c.name}`} aria-label={`Edit ${c.name}`}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                       <Phone className="h-3 w-3" /> {c.mobile}
                     </p>
@@ -202,7 +251,7 @@ export default function Customers() {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
-              <DialogTitle className="font-headline">Add Customer</DialogTitle>
+              <DialogTitle className="font-headline">{draft.id ? 'Edit Customer' : 'Add Customer'}</DialogTitle>
             </DialogHeader>
 
             <div className="grid gap-4 py-2">
@@ -247,7 +296,7 @@ export default function Customers() {
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
               <Button className="w-full bg-primary sm:w-auto" onClick={handleSave} disabled={isSaving}>
-                <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving…' : 'Save Customer'}
+                <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving…' : draft.id ? 'Save Changes' : 'Save Customer'}
               </Button>
             </DialogFooter>
           </DialogContent>
