@@ -69,7 +69,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-40 w-full border-b bg-white/80 backdrop-blur-md">
+      <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/90 shadow-sm backdrop-blur-md">
         <div className="flex items-center justify-between h-16 px-4 md:px-8">
           <div className="flex items-center gap-2">
             <Sheet open={open} onOpenChange={setOpen}>
@@ -149,8 +149,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   <Button
                     variant={pathname === item.href ? "default" : "ghost"}
                     className={cn(
-                      "flex items-center gap-2",
-                      pathname === item.href ? "" : "text-muted-foreground hover:text-primary"
+                      "flex items-center gap-2 rounded-full px-4 transition-all",
+                      pathname === item.href ? "shadow-sm" : "text-muted-foreground hover:bg-primary/5 hover:text-primary"
                     )}
                   >
                     {typeof Icon !== 'string' && <Icon className="h-4 w-4" />}
@@ -186,7 +186,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Mobile Bottom Navigation (Optional but good for mobile-first) */}
-      <div className="md:hidden sticky bottom-0 z-40 overflow-x-auto border-t bg-white/95 backdrop-blur">
+      <div className="sticky bottom-0 z-40 overflow-x-auto border-t border-border/80 bg-background/95 backdrop-blur md:hidden">
         <nav className="flex min-w-max justify-around gap-2 px-2 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         {navItems.map((item) => {
           const Icon = item.lucide || item.icon;
