@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { addCustomer, loadCustomers } from '@/lib/customer-store';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type CustomerDraft = {
   name: string;
@@ -30,12 +31,18 @@ const emptyDraft: CustomerDraft = {
 export default function Customers() {
   const { toast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<CustomerDraft>(emptyDraft);
 
   useEffect(() => {
-    const fetchCustomers = async () => setCustomers(await loadCustomers());
+    const fetchCustomers = async () => {
+      setIsLoading(true);
+      setCustomers(await loadCustomers());
+      setIsLoading(false);
+    };
     fetchCustomers();
 
     const onFocus = () => fetchCustomers();
@@ -80,20 +87,25 @@ export default function Customers() {
       return;
     }
 
-    const next = await addCustomer({
-      name: draft.name.trim(),
-      mobile: draft.mobile.trim(),
-      address: draft.address.trim(),
-      notes: '',
-    });
+    setIsSaving(true);
+    try {
+      const next = await addCustomer({
+        name: draft.name.trim(),
+        mobile: draft.mobile.trim(),
+        address: draft.address.trim(),
+        notes: '',
+      });
 
-    setCustomers(await loadCustomers());
-    setDialogOpen(false);
-    setDraft(emptyDraft);
-    toast({
-      title: 'Customer saved',
-      description: `${next.name} has been added to the registry.`,
-    });
+      setCustomers(await loadCustomers());
+      setDialogOpen(false);
+      setDraft(emptyDraft);
+      toast({
+        title: 'Customer saved',
+        description: `${next.name} has been added to the registry.`,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const router = useRouter();
@@ -122,7 +134,7 @@ export default function Customers() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((c) => (
+          {isLoading ? Array.from({ length: 6 }, (_, index) => <Card key={`customer-skeleton-${index}`} className="h-64 animate-pulse bg-muted" />) : filtered.map((c) => (
             <Card key={c.id} className="border-none shadow-md overflow-hidden hover:shadow-lg transition-shadow">
               <div className="h-2 bg-primary"></div>
               <CardContent className="p-6">
@@ -180,7 +192,7 @@ export default function Customers() {
           ))}
         </div>
 
-        {filtered.length === 0 && (
+        {!isLoading && filtered.length === 0 && (
           <div className="rounded-xl border-2 border-dashed py-16 text-center text-muted-foreground">
             <Search className="mx-auto mb-3 h-12 w-12 opacity-20" />
             <p>No matching customers found.</p>
@@ -234,8 +246,8 @@ export default function Customers() {
               <Button variant="outline" onClick={() => setDialogOpen(false)} className="w-full sm:w-auto">
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button className="w-full bg-primary sm:w-auto" onClick={handleSave}>
-                <Save className="mr-2 h-4 w-4" /> Save Customer
+              <Button className="w-full bg-primary sm:w-auto" onClick={handleSave} disabled={isSaving}>
+                <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving…' : 'Save Customer'}
               </Button>
             </DialogFooter>
           </DialogContent>

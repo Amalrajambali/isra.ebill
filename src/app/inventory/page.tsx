@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { addProduct, deleteProduct, loadProducts, updateProduct } from '@/lib/product-store';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const CATEGORIES: Category[] = ['Churidar', 'Saree', 'Kurti', 'Dupatta', 'Shawl', 'Other'];
 
@@ -36,13 +37,20 @@ const emptyDraft: ProductDraft = {
 export default function AddProducts() {
   const { toast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
   useEffect(() => {
-    const fetchProducts = async () => setProducts(await loadProducts());
+    const fetchProducts = async () => {
+      setIsLoading(true);
+      setProducts(await loadProducts());
+      setIsLoading(false);
+    };
     fetchProducts();
 
     const onFocus = () => {
@@ -97,28 +105,38 @@ export default function AddProducts() {
       stockQuantity: Number(draft.stockQuantity) || 0,
     };
 
-    const nextProducts = draft.id
-      ? await updateProduct({ ...nextProduct, id: draft.id })
-      : await addProduct(nextProduct);
+    setIsSaving(true);
+    try {
+      const nextProducts = draft.id
+        ? await updateProduct({ ...nextProduct, id: draft.id })
+        : await addProduct(nextProduct);
 
-    setProducts(nextProducts);
-    setDialogOpen(false);
-    setDraft(emptyDraft);
-    toast({
-      title: draft.id ? 'Product updated' : 'Product added',
-      description: `${nextProduct.name} has been saved successfully.`,
-    });
+      setProducts(nextProducts);
+      setDialogOpen(false);
+      setDraft(emptyDraft);
+      toast({
+        title: draft.id ? 'Product updated' : 'Product added',
+        description: `${nextProduct.name} has been saved successfully.`,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (product: Product) => {
     if (!window.confirm(`Delete ${product.name}?`)) return;
 
-    const nextProducts = await deleteProduct(product.id);
-    setProducts(nextProducts);
-    toast({
-      title: 'Product deleted',
-      description: `${product.name} was removed from inventory.`,
-    });
+    setDeletingProductId(product.id);
+    try {
+      const nextProducts = await deleteProduct(product.id);
+      setProducts(nextProducts);
+      toast({
+        title: 'Product deleted',
+        description: `${product.name} was removed from inventory.`,
+      });
+    } finally {
+      setDeletingProductId(null);
+    }
   };
 
   return (
@@ -150,7 +168,7 @@ export default function AddProducts() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filteredProducts.map((p) => (
+          {isLoading ? Array.from({ length: 6 }, (_, index) => <Card key={`product-skeleton-${index}`} className="h-48 animate-pulse bg-muted" />) : filteredProducts.map((p) => (
             <Card key={p.id} className="group overflow-hidden border-none shadow-md transition-shadow hover:shadow-lg">
               <CardContent className="space-y-4 p-4">
                 <div className="flex items-center gap-2">
@@ -182,8 +200,8 @@ export default function AddProducts() {
                   <Button variant="outline" size="sm" className="w-full" onClick={() => openEditDialog(p)}>
                     <Edit3 className="mr-1 h-3 w-3" /> Edit
                   </Button>
-                  <Button variant="ghost" size="sm" className="w-full text-destructive hover:bg-destructive/10" onClick={() => handleDelete(p)}>
-                    <Trash2 className="mr-1 h-3 w-3" /> Delete
+                  <Button variant="ghost" size="sm" className="w-full text-destructive hover:bg-destructive/10" onClick={() => handleDelete(p)} disabled={deletingProductId === p.id}>
+                    <Trash2 className="mr-1 h-3 w-3" /> {deletingProductId === p.id ? 'Deleting…' : 'Delete'}
                   </Button>
                 </div>
               </CardContent>
@@ -191,7 +209,7 @@ export default function AddProducts() {
           ))}
         </div>
 
-        {filteredProducts.length === 0 && (
+        {!isLoading && filteredProducts.length === 0 && (
           <div className="rounded-xl border-2 border-dashed py-16 text-center text-muted-foreground">
             <Package className="mx-auto mb-3 h-12 w-12 opacity-20" />
             <p>No matching products found.</p>
@@ -265,8 +283,8 @@ export default function AddProducts() {
               <Button variant="outline" onClick={() => setDialogOpen(false)} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button className="w-full bg-primary sm:w-auto" onClick={handleSave}>
-                {draft.id ? 'Save Changes' : 'Add to Inventory'}
+              <Button className="w-full bg-primary sm:w-auto" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Saving…' : draft.id ? 'Save Changes' : 'Add to Inventory'}
               </Button>
             </DialogFooter>
           </DialogContent>

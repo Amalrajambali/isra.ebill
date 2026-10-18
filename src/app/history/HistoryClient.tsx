@@ -24,12 +24,15 @@ export default function HistoryClient() {
     const insightsMode = searchParams?.get('insights') === '1';
     const [searchTerm, setSearchTerm] = useState(queryParam);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [deletingInvoiceNo, setDeletingInvoiceNo] = useState<string | null>(null);
     const { toast } = useToast();
     const deferredSearchTerm = useDeferredValue(searchTerm);
 
     useEffect(() => {
         const fetchInvoices = async () => {
             setInvoices(await listInvoices());
+            setIsLoading(false);
         };
 
         fetchInvoices();
@@ -101,12 +104,17 @@ export default function HistoryClient() {
     const removeInvoice = async (invoice: Invoice) => {
         if (!window.confirm(`Delete invoice ${invoice.invoiceNumber}?`)) return;
 
-        const next = await deleteInvoice(invoice.invoiceNumber);
-        setInvoices(next);
-        toast({
-            title: 'Invoice deleted',
-            description: `${invoice.invoiceNumber} has been removed from history.`,
-        });
+        setDeletingInvoiceNo(invoice.invoiceNumber);
+        try {
+            const next = await deleteInvoice(invoice.invoiceNumber);
+            setInvoices(next);
+            toast({
+                title: 'Invoice deleted',
+                description: `${invoice.invoiceNumber} has been removed from history.`,
+            });
+        } finally {
+            setDeletingInvoiceNo(null);
+        }
     };
 
     return (
@@ -171,7 +179,7 @@ export default function HistoryClient() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
-                                    {filtered.map((inv) => (
+                                    {isLoading ? <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">Loading transactions…</td></tr> : filtered.map((inv) => (
                                         <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="p-4">
                                                 <p className="font-bold text-primary">{inv.invoiceNumber}</p>
@@ -190,7 +198,7 @@ export default function HistoryClient() {
                                                     <Button variant="ghost" size="icon" title="View Details" onClick={() => openDetails(inv)}><Eye className="h-4 w-4" /></Button>
                                                     <Button variant="ghost" size="icon" title="Download PDF" onClick={() => downloadPdf(inv)}><Download className="h-4 w-4" /></Button>
                                                     <Button variant="ghost" size="icon" title="Send WhatsApp" className="text-[#25D366]" onClick={() => resendWhatsApp(inv)}><MessageSquare className="h-4 w-4" /></Button>
-                                                    <Button variant="ghost" size="icon" title="Delete Invoice" className="text-destructive" onClick={() => removeInvoice(inv)}><Trash2 className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="icon" title="Delete Invoice" className="text-destructive" onClick={() => removeInvoice(inv)} disabled={deletingInvoiceNo === inv.invoiceNumber}><Trash2 className="h-4 w-4" /></Button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -198,7 +206,7 @@ export default function HistoryClient() {
                                 </tbody>
                             </table>
                         </div>
-                        {filtered.length === 0 && (
+                        {!isLoading && filtered.length === 0 && (
                             <div className="text-center py-20 text-muted-foreground">
                                 <Search className="h-12 w-12 mx-auto mb-4 opacity-10" />
                                 <p>No matching transactions found.</p>

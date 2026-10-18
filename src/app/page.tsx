@@ -13,6 +13,7 @@ import { loadProducts } from '@/lib/product-store';
 import { loadCustomers } from '@/lib/customer-store';
 import { listInvoices } from '@/lib/invoice-api';
 import type { Product, Customer, Invoice } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const getCustomerLabel = (invoice: Invoice) => invoice.customerName?.trim() || 'Walk-in Customer';
 
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -32,6 +34,7 @@ export default function Dashboard() {
       setProducts(nextProducts);
       setCustomers(nextCustomers);
       setInvoices(nextInvoices);
+      setIsLoading(false);
     };
 
     fetchDashboard();
@@ -70,7 +73,7 @@ export default function Dashboard() {
                 <IndianRupee className="h-4 w-4 text-secondary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-primary">{formatCurrency(totalSales)}</div>
+                <div className="text-2xl font-bold text-primary">{isLoading ? <Skeleton className="h-8 w-28" /> : formatCurrency(totalSales)}</div>
                 <p className="text-xs text-secondary mt-1">Open monthly revenue report</p>
               </CardContent>
             </Link>
@@ -81,7 +84,7 @@ export default function Dashboard() {
               <Users className="h-4 w-4 text-secondary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">{totalCustomers}</div>
+              <div className="text-2xl font-bold text-primary">{isLoading ? <Skeleton className="h-8 w-12" /> : totalCustomers}</div>
               <p className="text-xs text-muted-foreground mt-1">Active shoppers</p>
             </CardContent>
           </Card>
@@ -91,7 +94,7 @@ export default function Dashboard() {
               <Package className="h-4 w-4 text-secondary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">{totalProducts}</div>
+              <div className="text-2xl font-bold text-primary">{isLoading ? <Skeleton className="h-8 w-12" /> : totalProducts}</div>
               <p className="text-xs text-muted-foreground mt-1">{products.reduce((total: number, product: Product) => total + product.stockQuantity, 0)} units in stock</p>
             </CardContent>
           </Card>
@@ -101,7 +104,7 @@ export default function Dashboard() {
               <AlertCircle className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">{lowStockCount}</div>
+              <div className="text-2xl font-bold text-primary">{isLoading ? <Skeleton className="h-8 w-12" /> : lowStockCount}</div>
               <p className="text-xs text-destructive mt-1">Needs attention</p>
             </CardContent>
           </Card>
@@ -114,7 +117,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="max-h-[18rem] space-y-4 overflow-y-auto pr-1">
-                {recentSales.map((inv) => (
+                {isLoading ? <p className="py-6 text-center text-sm text-muted-foreground">Loading sales…</p> : recentSales.map((inv) => (
                   <div key={inv.id} className="flex items-center justify-between p-3 border-b last:border-0">
                     <div>
                       <p className="font-bold text-primary">{getCustomerLabel(inv)}</p>
@@ -139,7 +142,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="max-h-[18rem] space-y-4 overflow-y-auto pr-1">
-                {lowStockItems.map((p) => (
+                {isLoading ? <p className="py-6 text-center text-sm text-muted-foreground">Loading inventory…</p> : lowStockItems.map((p) => (
                   <div key={p.id} className="flex items-center justify-between p-3 border-b last:border-0">
                     <div>
                       <p className="font-bold text-primary">{p.name}</p>

@@ -26,6 +26,8 @@ export default function NewInvoice() {
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -78,6 +80,7 @@ export default function NewInvoice() {
       const [nextProducts, nextCustomers] = await Promise.all([loadProducts(), loadCustomers()]);
       setProducts(nextProducts);
       setCustomers(nextCustomers);
+      setIsLoadingData(false);
     };
 
     fetchData();
@@ -103,6 +106,10 @@ export default function NewInvoice() {
 
   const addItem = (product: Product) => {
     const existing = items.find(i => i.productId === product.id);
+    if ((existing?.quantity ?? 0) >= product.stockQuantity) {
+      toast({ variant: 'destructive', title: 'Insufficient stock', description: `Only ${product.stockQuantity} unit(s) of ${product.name} are available.` });
+      return;
+    }
     if (existing) {
       setItems(items.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1, total: (i.quantity + 1) * i.price - i.discount } : i));
     } else {
@@ -125,10 +132,32 @@ export default function NewInvoice() {
   const grandTotal = subtotal - totalDiscount;
 
   const handleGenerateInvoice = async () => {
-    const rawName = customer.name?.trim() || '';
-    const normalizedMobile = (customer.mobile || '').replace(/\D/g, '');
+    const rawName = isWalkInCustomer ? '' : customer.name?.trim() || '';
+    const normalizedMobile = isWalkInCustomer ? '' : (customer.mobile || '').replace(/\D/g, '');
     if (items.length === 0) {
-      toast({ variant: "destructive", title: "Error", description: "Add at least one product." });
+      toast({ variant: 'destructive', title: 'Product required', description: 'Select at least one product before generating the invoice.' });
+      return;
+    }
+
+    if (!isWalkInCustomer && !rawName) {
+      toast({ variant: 'destructive', title: 'Customer name required', description: 'Enter the customer name, or select Walk-in customer.' });
+      return;
+    }
+
+    if (!isWalkInCustomer && !normalizedMobile) {
+      toast({ variant: 'destructive', title: 'Mobile number required', description: 'Enter the customer mobile number, or select Walk-in customer.' });
+      return;
+    }
+
+    const invalidItem = items.find((item) => {
+      const product = products.find((candidate) => candidate.id === item.productId);
+      return !product || !Number.isInteger(item.quantity) || item.quantity < 1 ||
+        !Number.isFinite(item.price) || item.price < 0 ||
+        !Number.isFinite(item.discount) || item.discount < 0 || item.discount > item.price * item.quantity ||
+        item.quantity > product.stockQuantity;
+    });
+    if (invalidItem) {
+      toast({ variant: 'destructive', title: 'Invalid invoice item', description: `${invalidItem.productName} has an invalid quantity, discount, price, or stock level. Please correct it before generating the invoice.` });
       return;
     }
 
@@ -137,20 +166,32 @@ export default function NewInvoice() {
       return;
     }
 
+    const matchedByMobile = normalizedMobile
+      ? customers.find((item) => item.mobile.replace(/\D/g, '') === normalizedMobile)
+      : undefined;
+    const matchedByName = rawName
+      ? customers.find((item) => item.name.trim().toLowerCase() === rawName.toLowerCase())
+      : undefined;
+    if (matchedByMobile && matchedByName && matchedByMobile.id !== matchedByName.id) {
+      toast({ variant: 'destructive', title: 'Customer details do not match', description: 'The entered name and mobile number belong to different registered customers. Select the correct customer or update the details.' });
+      return;
+    }
+
     setIsGenerating(true);
-    const invoiceNumber = await generateUniqueInvoiceNumber();
-    const pdfUrl = buildInvoicePdfUrl(invoiceNumber, window.location.origin);
-    const today = new Date().toISOString().split('T')[0];
-    const hasCustomerInfo = !isWalkInCustomer && Boolean(rawName || normalizedMobile);
-    const matchedCustomer =
-      hasCustomerInfo
-        ? exactCustomerMatch ??
+    try {
+      const invoiceNumber = await generateUniqueInvoiceNumber();
+      const pdfUrl = buildInvoicePdfUrl(invoiceNumber, window.location.origin);
+      const today = new Date().toISOString().split('T')[0];
+      const hasCustomerInfo = !isWalkInCustomer && Boolean(rawName || normalizedMobile);
+      const matchedCustomer =
+        hasCustomerInfo
+          ? exactCustomerMatch ??
           customers.find((item) => item.name.trim().toLowerCase() === rawName.toLowerCase()) ??
           (normalizedMobile ? customers.find((item) => item.mobile.replace(/\D/g, '') === normalizedMobile) : undefined)
-        : undefined;
+          : undefined;
 
-    const savedCustomer = hasCustomerInfo
-      ? await upsertCustomer({
+      const savedCustomer = hasCustomerInfo
+        ? await upsertCustomer({
           id: matchedCustomer?.id,
           name: rawName || matchedCustomer?.name || WALK_IN_CUSTOMER_NAME,
           mobile: normalizedMobile || matchedCustomer?.mobile || '',
@@ -159,7 +200,7 @@ export default function NewInvoice() {
           totalOrders: (matchedCustomer?.totalOrders ?? 0) + 1,
           lastPurchaseDate: today,
         })
-      : {
+        : {
           id: '',
           name: WALK_IN_CUSTOMER_NAME,
           mobile: '',
@@ -167,37 +208,42 @@ export default function NewInvoice() {
           totalOrders: 0,
         };
 
-    if (hasCustomerInfo) {
-      setCustomers(await loadCustomers());
-      setCustomer(savedCustomer);
-      setIsExistingCustomer(true);
-    } else {
-      setCustomer({ name: '', mobile: '', address: '' });
-      setIsExistingCustomer(false);
+      if (hasCustomerInfo) {
+        setCustomers(await loadCustomers());
+        setCustomer(savedCustomer);
+        setIsExistingCustomer(true);
+      } else {
+        setCustomer({ name: '', mobile: '', address: '' });
+        setIsExistingCustomer(false);
+      }
+
+      const invoice: Invoice = {
+        id: Math.random().toString(36).substr(2, 9),
+        invoiceNumber,
+        date: new Date().toISOString().split('T')[0],
+        customerId: savedCustomer.id,
+        customerName: savedCustomer.name,
+        customerMobile: savedCustomer.mobile,
+        customerAddress: savedCustomer.address || '',
+        items,
+        subtotal,
+        totalDiscount,
+        grandTotal,
+        pdfUrl,
+        pdfUploadStatus: 'uploaded',
+      };
+
+      await upsertInvoice(invoice);
+      await adjustProductStock(items.map((item) => ({ productId: item.productId, delta: -item.quantity })));
+      setProducts(await loadProducts());
+      setSuccessInvoice(invoice);
+      setPdfUploadStatus('uploaded');
+    } catch (error) {
+      console.error('Failed to generate invoice:', error);
+      toast({ variant: 'destructive', title: 'Invoice generation failed', description: 'The invoice could not be saved. Please try again.' });
+    } finally {
+      setIsGenerating(false);
     }
-
-    const invoice: Invoice = {
-      id: Math.random().toString(36).substr(2, 9),
-      invoiceNumber,
-      date: new Date().toISOString().split('T')[0],
-      customerId: savedCustomer.id,
-      customerName: savedCustomer.name,
-      customerMobile: savedCustomer.mobile,
-      customerAddress: savedCustomer.address || '',
-      items,
-      subtotal,
-      totalDiscount,
-      grandTotal,
-      pdfUrl,
-      pdfUploadStatus: 'uploaded',
-    };
-
-    await upsertInvoice(invoice);
-    await adjustProductStock(items.map((item) => ({ productId: item.productId, delta: -item.quantity })));
-    setProducts(await loadProducts());
-    setSuccessInvoice(invoice);
-    setPdfUploadStatus('uploaded');
-    setIsGenerating(false);
   };
 
   const handleSelectCustomer = (selected: Customer) => {
@@ -230,20 +276,35 @@ export default function NewInvoice() {
       return;
     }
 
-    const saved = await addCustomer({
-      name: customer.name.trim(),
-      mobile: normalizedMobile,
-      address: customer.address?.trim() || '',
-      notes: '',
-    });
+    const duplicate = customers.find((item) => item.mobile.replace(/\D/g, '') === normalizedMobile);
+    if (duplicate) {
+      toast({
+        variant: 'destructive',
+        title: 'Mobile number already registered',
+        description: `Select ${duplicate.name} from the registered customer list instead.`,
+      });
+      return;
+    }
 
-    setCustomers(await loadCustomers());
-    setCustomer(saved);
-    setIsExistingCustomer(true);
-    toast({
-      title: 'Customer added',
-      description: `${saved.name} is now saved in the registry.`,
-    });
+    setIsAddingCustomer(true);
+    try {
+      const saved = await addCustomer({
+        name: customer.name.trim(),
+        mobile: normalizedMobile,
+        address: customer.address?.trim() || '',
+        notes: '',
+      });
+
+      setCustomers(await loadCustomers());
+      setCustomer(saved);
+      setIsExistingCustomer(true);
+      toast({
+        title: 'Customer added',
+        description: `${saved.name} is now saved in the registry.`,
+      });
+    } finally {
+      setIsAddingCustomer(false);
+    }
   };
 
   const downloadPDF = async () => {
@@ -333,7 +394,18 @@ export default function NewInvoice() {
               >
                 <Share2 className="h-4 w-4 mr-2" /> Share to WhatsApp
               </Button>
-              <Button variant="outline" size="lg" onClick={() => setSuccessInvoice(null)}>Create New Invoice</Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {
+                  setSuccessInvoice(null);
+                  setCustomer({ name: '', mobile: '', address: '' });
+                  setIsWalkInCustomer(false);
+                  setIsExistingCustomer(false);
+                  setCustomerSearchTerm('');
+                  setItems([]);
+                }}
+              >Create New Invoice</Button>
             </div>
           </div>
 
@@ -362,7 +434,7 @@ export default function NewInvoice() {
                 />
                 {deferredSearchTerm && (
                   <div className="absolute z-10 w-full mt-2 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                    {products.filter(p => p.name.toLowerCase().includes(deferredSearchTerm.toLowerCase())).map(p => (
+                    {isLoadingData ? <p className="p-4 text-sm text-muted-foreground">Loading products…</p> : products.filter(p => p.name.toLowerCase().includes(deferredSearchTerm.toLowerCase())).map(p => (
                       <div
                         key={p.id}
                         className="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b"
@@ -417,7 +489,14 @@ export default function NewInvoice() {
                                   variant="outline"
                                   size="icon"
                                   className="h-7 w-7"
-                                  onClick={() => setItems(items.map(i => i.productId === item.productId ? { ...i, quantity: i.quantity + 1, total: (i.quantity + 1) * i.price - i.discount } : i))}
+                                  onClick={() => {
+                                    const product = products.find((candidate) => candidate.id === item.productId);
+                                    if (!product || item.quantity >= product.stockQuantity) {
+                                      toast({ variant: 'destructive', title: 'Insufficient stock', description: `Only ${product?.stockQuantity ?? 0} unit(s) of ${item.productName} are available.` });
+                                      return;
+                                    }
+                                    setItems(items.map(i => i.productId === item.productId ? { ...i, quantity: i.quantity + 1, total: (i.quantity + 1) * i.price - i.discount } : i));
+                                  }}
                                 >+</Button>
                               </div>
                             </td>
@@ -428,7 +507,13 @@ export default function NewInvoice() {
                                 className="w-16 h-8 text-right p-1 ml-auto"
                                 value={item.discount}
                                 onChange={(e) => {
-                                  const val = parseInt(e.target.value) || 0;
+                                  const rawValue = e.target.value;
+                                  const val = rawValue === '' ? 0 : Number(rawValue);
+                                  const maxDiscount = item.price * item.quantity;
+                                  if (!Number.isFinite(val) || val < 0 || val > maxDiscount) {
+                                    toast({ variant: 'destructive', title: 'Invalid discount', description: `Discount must be between 0 and ${formatCurrency(maxDiscount)}.` });
+                                    return;
+                                  }
                                   setItems(items.map(i => i.productId === item.productId ? { ...i, discount: val, total: i.quantity * i.price - val } : i));
                                 }}
                               />
@@ -501,116 +586,116 @@ export default function NewInvoice() {
               </label>
 
               {!isWalkInCustomer && <>
-              {/* Search Customer Bar */}
-              <div className="space-y-2">
-                <Label htmlFor="customer-search" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Search Registered Customer</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="customer-search"
-                    placeholder="Search by name or mobile number..."
-                    className="pl-10 h-11"
-                    value={customerSearchTerm}
-                    onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Already registered result on top */}
-              {!isExistingCustomer && (searchMatches.length > 0 || customerMatches.length > 0) && (
-                <div className="rounded-xl border border-secondary/20 bg-secondary/5 p-4 space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                    <UserCheck className="h-4 w-4 text-secondary" />
-                    Already registered, please select
-                  </div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {Array.from(new Map([...searchMatches, ...customerMatches].map(item => [item.id, item])).values())
-                      .slice(0, 4)
-                      .map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="w-full rounded-lg border bg-white px-3 py-2 text-left transition-colors hover:border-secondary hover:bg-secondary/5 flex items-center justify-between gap-3 shadow-sm"
-                          onClick={() => {
-                            handleSelectCustomer(item);
-                            setCustomerSearchTerm('');
-                          }}
-                        >
-                          <div className="min-w-0">
-                            <p className="font-semibold text-sm text-primary truncate">{item.name}</p>
-                            <p className="text-xs text-muted-foreground">{item.mobile}</p>
-                          </div>
-                          <Badge variant="secondary" className="bg-secondary/15 text-secondary hover:bg-secondary/20 border-none text-[10px]">Select</Badge>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t border-slate-100 my-4 pt-4 space-y-4">
+                {/* Search Customer Bar */}
                 <div className="space-y-2">
-                  <Label htmlFor="mobile">Mobile Number</Label>
+                  <Label htmlFor="customer-search" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Search Registered Customer</Label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="mobile"
-                      placeholder="10 digit mobile..."
-                      className="pl-10"
-                      inputMode="numeric"
-                      maxLength={10}
-                      value={customer.mobile || ''}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        setCustomer({
-                          ...customer,
-                          mobile: val,
-                        });
-                        
-                        // Auto-link if exact mobile match is typed
-                        if (val.length === 10) {
-                          const exactMatch = customers.find(c => c.mobile.replace(/\D/g, '') === val);
-                          if (exactMatch) {
-                            setCustomer(exactMatch);
-                            setIsExistingCustomer(true);
-                            toast({
-                              title: 'Registered customer loaded',
-                              description: `${exactMatch.name} has been auto-filled.`,
-                            });
-                            return;
+                      id="customer-search"
+                      placeholder="Search by name or mobile number..."
+                      className="pl-10 h-11"
+                      value={customerSearchTerm}
+                      onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Already registered result on top */}
+                {!isExistingCustomer && (searchMatches.length > 0 || customerMatches.length > 0) && (
+                  <div className="rounded-xl border border-secondary/20 bg-secondary/5 p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                      <UserCheck className="h-4 w-4 text-secondary" />
+                      Already registered, please select
+                    </div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {Array.from(new Map([...searchMatches, ...customerMatches].map(item => [item.id, item])).values())
+                        .slice(0, 4)
+                        .map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="w-full rounded-lg border bg-white px-3 py-2 text-left transition-colors hover:border-secondary hover:bg-secondary/5 flex items-center justify-between gap-3 shadow-sm"
+                            onClick={() => {
+                              handleSelectCustomer(item);
+                              setCustomerSearchTerm('');
+                            }}
+                          >
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm text-primary truncate">{item.name}</p>
+                              <p className="text-xs text-muted-foreground">{item.mobile}</p>
+                            </div>
+                            <Badge variant="secondary" className="bg-secondary/15 text-secondary hover:bg-secondary/20 border-none text-[10px]">Select</Badge>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="border-t border-slate-100 my-4 pt-4 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="mobile">Mobile Number</Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="mobile"
+                        placeholder="10 digit mobile..."
+                        className="pl-10"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={customer.mobile || ''}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setCustomer({
+                            ...customer,
+                            mobile: val,
+                          });
+
+                          // Auto-link if exact mobile match is typed
+                          if (val.length === 10) {
+                            const exactMatch = customers.find(c => c.mobile.replace(/\D/g, '') === val);
+                            if (exactMatch) {
+                              setCustomer(exactMatch);
+                              setIsExistingCustomer(true);
+                              toast({
+                                title: 'Registered customer loaded',
+                                description: `${exactMatch.name} has been auto-filled.`,
+                              });
+                              return;
+                            }
                           }
-                        }
+                          setIsExistingCustomer(false);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Customer Name</Label>
+                    <Input
+                      id="name"
+                      placeholder="Full Name"
+                      value={customer.name || ''}
+                      onChange={(e) => {
+                        setCustomer({ ...customer, name: e.target.value });
+                        setIsExistingCustomer(false);
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Address (Optional)</Label>
+                    <Input
+                      id="address"
+                      placeholder="City/Area"
+                      value={customer.address || ''}
+                      onChange={(e) => {
+                        setCustomer({ ...customer, address: e.target.value });
                         setIsExistingCustomer(false);
                       }}
                     />
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="name">Customer Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="Full Name"
-                    value={customer.name || ''}
-                    onChange={(e) => {
-                      setCustomer({ ...customer, name: e.target.value });
-                      setIsExistingCustomer(false);
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="address">Address (Optional)</Label>
-                  <Input
-                    id="address"
-                    placeholder="City/Area"
-                    value={customer.address || ''}
-                    onChange={(e) => {
-                      setCustomer({ ...customer, address: e.target.value });
-                      setIsExistingCustomer(false);
-                    }}
-                  />
-                </div>
-              </div>
               </>}
 
               {/* Save as New Customer button (only show when name and 10-digit mobile are entered, not already registered, and no matching customer exists) */}
@@ -620,8 +705,8 @@ export default function NewInvoice() {
                     <UserPlus className="h-4 w-4" />
                     New customer details entered.
                   </div>
-                  <Button variant="outline" className="w-full border-blue-200 hover:bg-blue-50 text-blue-700 hover:text-blue-800" onClick={handleAddAsNewCustomer}>
-                    Add as New Customer
+                  <Button variant="outline" className="w-full border-blue-200 hover:bg-blue-50 text-blue-700 hover:text-blue-800" onClick={handleAddAsNewCustomer} disabled={isAddingCustomer}>
+                    {isAddingCustomer ? 'Adding customer…' : 'Add as New Customer'}
                   </Button>
                 </div>
               )}

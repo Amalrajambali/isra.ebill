@@ -30,10 +30,14 @@ const formatMonth = (monthKey: string) => {
 
 export default function RevenueReports() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey);
 
   useEffect(() => {
-    const fetchInvoices = async () => setInvoices(await listInvoices());
+    const fetchInvoices = async () => {
+      setInvoices(await listInvoices());
+      setIsLoading(false);
+    };
     fetchInvoices();
   }, []);
 
@@ -70,7 +74,7 @@ export default function RevenueReports() {
           <CardContent className="flex flex-col gap-2 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-white/70">Total Revenue</p>
-              <p className="mt-1 text-3xl font-bold">{formatCurrency(totalRevenue)}</p>
+              <p className="mt-1 text-3xl font-bold">{isLoading ? 'Loading…' : formatCurrency(totalRevenue)}</p>
               <p className="mt-1 text-xs text-white/70">All recorded sales</p>
             </div>
             <IndianRupee className="h-10 w-10 text-secondary" />
@@ -99,22 +103,22 @@ export default function RevenueReports() {
           <CardContent className="grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">{formatMonth(selectedMonth)} Revenue</p>
-              <p className="mt-2 text-2xl font-bold text-primary">{formatCurrency(selectedRevenue)}</p>
+                <p className="mt-2 text-2xl font-bold text-primary">{isLoading ? 'Loading…' : formatCurrency(selectedRevenue)}</p>
               <p className="mt-1 text-xs text-muted-foreground">{selectedInvoices.length} sale{selectedInvoices.length === 1 ? '' : 's'}</p>
             </div>
             <div className="rounded-xl border bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">Previous Month</p>
-              <p className="mt-2 text-2xl font-bold text-primary">{formatCurrency(previousRevenue)}</p>
+                <p className="mt-2 text-2xl font-bold text-primary">{isLoading ? 'Loading…' : formatCurrency(previousRevenue)}</p>
               <p className="mt-1 text-xs text-muted-foreground">{formatMonth(previousMonth)} · {previousInvoices.length} sale{previousInvoices.length === 1 ? '' : 's'}</p>
             </div>
             <div className="rounded-xl border bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-widest text-muted-foreground">Growth / Loss</p>
               <p className={`mt-2 flex items-center gap-2 text-2xl font-bold ${revenueChange >= 0 ? 'text-green-600' : 'text-destructive'}`}>
                 {revenueChange >= 0 ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
-                {revenueChange >= 0 ? '+' : ''}{formatCurrency(revenueChange)}
+                {isLoading ? 'Loading…' : <>{revenueChange >= 0 ? '+' : ''}{formatCurrency(revenueChange)}</>}
               </p>
               <p className={`mt-1 text-xs ${revenueChange >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                {revenueChangePercent === null
+                {isLoading ? 'Loading report…' : revenueChangePercent === null
                   ? (selectedRevenue > 0 ? 'New revenue' : 'No change')
                   : `${revenueChangePercent >= 0 ? '+' : ''}${revenueChangePercent.toFixed(1)}% from previous month`}
               </p>
