@@ -1,5 +1,9 @@
 import { jsPDF } from 'jspdf';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Invoice } from '@/lib/types';
+
+const invoiceLogo = `data:image/png;base64,${readFileSync(join(process.cwd(), 'public', 'isra-logo-mono.png')).toString('base64')}`;
 
 const COLORS = {
   ink: [28, 34, 48] as const,
@@ -29,15 +33,7 @@ function drawHeader(pdf: jsPDF, invoice: Invoice) {
 
   pdf.setTextColor(...COLORS.ink);
 
-  pdf.setFont('times', 'bold');
-  pdf.setFontSize(20);
-  pdf.text('ISRA ETHNIC', left, top);
-
-  pdf.setFont('times', 'normal');
-  pdf.setFontSize(8.5);
-  pdf.setCharSpace(0.8);
-  pdf.text('CHURIDARS & SAREES', left, top + 5.5);
-  pdf.setCharSpace(0);
+  pdf.addImage(invoiceLogo, 'PNG', left, top - 7, 50, 15.5);
 
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9.5);

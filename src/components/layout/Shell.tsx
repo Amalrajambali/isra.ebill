@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, ShoppingCart, Package, Users, History, Settings, Menu, LogOut, BarChart3 } from 'lucide-react';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth-provider';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
@@ -24,7 +25,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
   const { user, loading, logout } = useAuth();
+
+  useEffect(() => {
+    setPendingPath(null);
+  }, [pathname]);
 
   useEffect(() => {
     if (!loading && !user && pathname !== '/login') {
@@ -34,11 +40,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   if (loading || (!user && pathname !== '/login')) {
     return (
-      <div className="min-h-screen grid place-items-center bg-background">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="min-h-screen bg-background" role="status" aria-label="Loading application">
+        <header className="flex h-16 items-center justify-between border-b bg-white px-4 md:px-8">
+          <Skeleton className="h-8 w-36" />
+          <div className="hidden items-center gap-3 md:flex">
+            {Array.from({ length: 7 }, (_, index) => <Skeleton key={index} className="h-9 w-20" />)}
+          </div>
+        </header>
+        <main className="container mx-auto max-w-7xl space-y-8 p-4 md:p-8">
+          <div className="space-y-3">
+            <Skeleton className="h-9 w-64" />
+            <Skeleton className="h-4 w-80 max-w-full" />
+          </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}
+          </div>
+          <div className="grid gap-8 lg:grid-cols-2">
+            <Skeleton className="h-64 rounded-xl" />
+            <Skeleton className="h-64 rounded-xl" />
+          </div>
+        </main>
       </div>
     );
   }
+
+  const navigationIsPending = pendingPath !== null && pendingPath !== pathname;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -63,7 +89,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       <Link
                         key={item.href}
                         href={item.href}
-                        onClick={() => setOpen(false)}
+                        onClick={() => {
+                          setOpen(false);
+                          if (item.href !== pathname) setPendingPath(item.href);
+                        }}
                         className={cn(
                           "flex items-center gap-3 px-4 py-3 rounded-lg text-lg font-medium transition-colors",
                           pathname === item.href 
@@ -114,7 +143,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
             {navItems.map((item) => {
               const Icon = item.lucide || item.icon;
               return (
-                <Link key={item.href} href={item.href}>
+                <Link key={item.href} href={item.href} onClick={() => {
+                  if (item.href !== pathname) setPendingPath(item.href);
+                }}>
                   <Button
                     variant={pathname === item.href ? "default" : "ghost"}
                     className={cn(
@@ -135,8 +166,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-x-hidden">
-        <div className="container mx-auto max-w-7xl p-4 pb-24 animate-in fade-in duration-500 md:p-8 md:pb-8">
-          {children}
+        <div className="container mx-auto max-w-7xl p-4 pb-24 md:p-8 md:pb-8" aria-busy={navigationIsPending}>
+          {navigationIsPending ? (
+            <div className="animate-in fade-in duration-150" role="status" aria-label="Loading page">
+              <div className="mb-8 space-y-3">
+                <Skeleton className="h-9 w-64" />
+                <Skeleton className="h-4 w-80 max-w-full" />
+              </div>
+              <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+                {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}
+              </div>
+              <div className="grid gap-8 lg:grid-cols-2">
+                <Skeleton className="h-64 rounded-xl" />
+                <Skeleton className="h-64 rounded-xl" />
+              </div>
+            </div>
+          ) : children}
         </div>
       </main>
 
@@ -147,7 +192,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           const Icon = item.lucide || item.icon;
           const isActive = pathname === item.href;
           return (
-            <Link key={item.href} href={item.href} className={cn(
+            <Link key={item.href} href={item.href} onClick={() => {
+              if (item.href !== pathname) setPendingPath(item.href);
+            }} className={cn(
               "flex min-w-[76px] flex-col items-center rounded-lg px-2 py-2 transition-colors",
               isActive ? "text-primary" : "text-muted-foreground"
             )}>

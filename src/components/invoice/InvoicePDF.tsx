@@ -22,10 +22,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, settings }) => 
     >
       <div className="mb-10 flex items-start justify-between gap-8 border-b border-slate-800/80 pb-7">
         <div className="space-y-1">
-          <h1 className="text-4xl font-serif font-bold tracking-tight text-slate-900">ISRA ETHNIC</h1>
-          <p className="text-[11px] font-medium uppercase tracking-[0.35em] text-slate-500">
-            Boutique &amp; Fashion Studio
-          </p>
+          <img src="/isra-logo-mono.png" alt="ISRA Churidar & Sarees" className="h-auto w-64" />
           <div className="mt-3 text-sm leading-6 text-slate-600">
             <p>{settings.address}</p>
             <p>Ph: {settings.phone1}, {settings.phone2}</p>
