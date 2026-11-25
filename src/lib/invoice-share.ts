@@ -21,10 +21,17 @@ export const buildInvoicePdfUrl = (invoiceNumber: string, origin?: string) => {
   return origin ? new URL(path, origin).toString() : path;
 };
 
+// Mobile receipt page shown to customers; it links on to the A4 PDF.
+export const buildInvoiceBillUrl = (invoiceNumber: string, origin?: string) => {
+  const path = `/bill/${encodeURIComponent(invoiceNumber)}`;
+  return origin ? new URL(path, origin).toString() : path;
+};
+
 export const buildShareMessage = (invoice: Invoice) => {
   const invoiceUrl =
-    invoice.pdfUrl ||
-    (typeof window !== 'undefined' ? buildInvoicePdfUrl(invoice.invoiceNumber, window.location.origin) : '');
+    typeof window !== 'undefined'
+      ? buildInvoiceBillUrl(invoice.invoiceNumber, window.location.origin)
+      : invoice.pdfUrl || '';
 
   return [
     'Dear Customer,',

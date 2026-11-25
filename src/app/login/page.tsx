@@ -128,9 +128,6 @@ export default function LoginPage() {
                 <Button className="h-11 w-full shadow-md sm:h-12" onClick={() => handleAuth('signIn')} disabled={isSubmitting}>
                   {isSubmitting ? 'Please wait…' : 'Sign In'}
                 </Button>
-                <Button variant="outline" className="h-11 w-full bg-transparent sm:h-12" onClick={() => handleAuth('signUp')} disabled={isSubmitting}>
-                  Create Account
-                </Button>
               </div>
               <p className="hidden border-t border-border pt-5 text-center text-xs leading-5 text-muted-foreground sm:block">
                 Your store workspace, thoughtfully organized.
